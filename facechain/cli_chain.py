@@ -11,6 +11,7 @@ import click
 from rich.console import Console
 
 from .cache import STATS, Cache
+from .chain import ipfs
 from .chain.memo import explorer_url, format_memo, load_keypair, send_memo
 from .chain.verify import read_receipt, render_report, verify_run
 from .config import Settings, load
@@ -18,6 +19,7 @@ from .evidence.bundle import (
     build_bundle,
     bundle_hash,
     load_bundle,
+    media_suffix,
     new_run_id,
     tamper_copy,
     write_evidence,
@@ -35,14 +37,22 @@ def _registry_pubkey(settings: Settings) -> str:
     return str(load_keypair(settings.solana_keypair_path).pubkey())
 
 
-def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
-    """Send the memo for a run directory's bundle and write receipt.json."""
+def anchor_run(run_dir: Path, settings: Settings, *, pin: bool = True) -> dict[str, object]:
+    """Pin bundle.json (if Pinata is configured), send the memo, write receipt.json."""
     bundle = load_bundle(run_dir / "bundle.json")
     h = bundle_hash(bundle)
     post, match = bundle["post"], bundle["match"]
-    memo = format_memo(
-        h, post["media_sha256"], post.get("media_cid"), match["similarity_bps"], post["url"]
-    )
+    bundle_cid: str | None = None
+    if pin and settings.pinata_jwt:
+        bundle_cid = ipfs.pin_file(
+            run_dir / "bundle.json", jwt=settings.pinata_jwt, name=f"{h[:16]}-bundle.json"
+        )
+        console.print(
+            f"[green]pinned bundle.json: {bundle_cid}[/green]"
+            if bundle_cid
+            else "[yellow]Pinata upload failed; continuing with cid=-[/yellow]"
+        )
+    memo = format_memo(h, post["media_sha256"], bundle_cid, match["similarity_bps"], post["url"])
     keypair = load_keypair(settings.solana_keypair_path)
     console.print(f"[dim]memo ({len(memo.encode())} bytes): {memo}[/dim]")
     started = time.perf_counter()
@@ -52,6 +62,8 @@ def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
         "explorer": explorer_url(signature),
         "memo": memo,
         "bundle_hash": h,
+        "bundle_cid": bundle_cid,
+        "media_cid": post.get("media_cid"),
         "registry": str(keypair.pubkey()),
         "rpc_url": settings.solana_rpc_url,
         "anchored_at": int(time.time()),
@@ -76,6 +88,7 @@ def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
 @click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
 @click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
 @click.option("--no-anchor", is_flag=True, help="Stop after writing evidence; skip the chain.")
+@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
 def run(
     image_path: Path,
     engines: str,
@@ -84,6 +97,7 @@ def run(
     live: bool,
     offline: bool,
     no_anchor: bool,
+    no_pin: bool,
 ) -> None:
     """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo."""
     from .pipeline import NoFaceError, run_search
@@ -119,6 +133,21 @@ def run(
     winner = decision.winner if decision.accepted else None
     bundle = None
     if winner is not None:
+        media_cid: str | None = None
+        if settings.pinata_jwt and not no_pin and winner.media_bytes:
+            media_cid = ipfs.pin_bytes(
+                winner.media_bytes,
+                jwt=settings.pinata_jwt,
+                name=f"{run_id}-post_media{media_suffix(winner.media_bytes)}",
+                content_type="image/jpeg"
+                if media_suffix(winner.media_bytes) == ".jpg"
+                else "application/octet-stream",
+            )
+            console.print(
+                f"[green]pinned post media: {media_cid}[/green]"
+                if media_cid
+                else "[yellow]Pinata media upload failed; media_cid stays null[/yellow]"
+            )
         bundle = build_bundle(
             face_id=outcome.face_id,
             winner=winner,
@@ -126,6 +155,7 @@ def run(
             candidates_considered=len(outcome.candidates),
             found_at=int(time.time()),
             engines=engine_list,
+            media_cid=media_cid,
         )
     write_evidence(
         run_dir,
@@ -145,16 +175,17 @@ def run(
     console.print(f"winner: {winner.url}\nbundle sha256 (H): {bundle_hash(bundle)}")
     if no_anchor:
         raise SystemExit(0)
-    anchor_run(run_dir, settings)
+    anchor_run(run_dir, settings, pin=not no_pin)
 
 
 @click.command()
 @click.option(
     "--run", "run_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path)
 )
-def anchor(run_dir: Path) -> None:
+@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
+def anchor(run_dir: Path, no_pin: bool) -> None:
     """Anchor an existing run's bundle on devnet (writes receipt.json)."""
-    anchor_run(run_dir, load())
+    anchor_run(run_dir, load(), pin=not no_pin)
 
 
 @click.command()
@@ -168,13 +199,20 @@ def anchor(run_dir: Path) -> None:
 @click.option(
     "--registry", default=None, help="Registry wallet pubkey (default: receipt or keypair)."
 )
+@click.option("--cid", default=None, help="Fetch bundle.json (and its media) from IPFS by CID.")
 def verify(
-    run_dir: Path | None, bundle_path: Path | None, tamper: bool, registry: str | None
+    run_dir: Path | None,
+    bundle_path: Path | None,
+    tamper: bool,
+    registry: str | None,
+    cid: str | None,
 ) -> None:
     """Recompute hashes from stored evidence and check them against the on-chain memo."""
     settings = load()
+    if cid:
+        run_dir = fetch_run_from_ipfs(cid, settings)
     if run_dir is None and bundle_path is None:
-        raise click.UsageError("pass --run DIR or --bundle FILE")
+        raise click.UsageError("pass --run DIR, --bundle FILE or --cid CID")
     target = run_dir if run_dir is not None else bundle_path.parent  # type: ignore[union-attr]
     if tamper:
         target = tamper_copy(target)
@@ -184,3 +222,22 @@ def verify(
     report = verify_run(target, registry=registry_key, rpc_url=settings.solana_rpc_url)
     console.print(render_report(report))
     raise SystemExit(0 if report.ok else 1)
+
+
+def fetch_run_from_ipfs(cid: str, settings: Settings) -> Path:
+    """Materialise a run directory from IPFS: bundle.json by CID, media by bundle.post.media_cid."""
+    cache = Cache(settings.cache_dir)
+    raw = ipfs.fetch(cid, cache=cache, gateway=settings.pinata_gateway)
+    if not raw:
+        raise click.ClickException(f"could not fetch {cid} from any IPFS gateway")
+    run_dir = settings.evidence_dir / f"_cid_{cid[:16]}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "bundle.json").write_bytes(raw)
+    bundle = json.loads(raw.decode("utf-8"))
+    media_cid = bundle.get("post", {}).get("media_cid")
+    if media_cid:
+        media = ipfs.fetch(media_cid, cache=cache, gateway=settings.pinata_gateway)
+        if media:
+            (run_dir / f"post_media{media_suffix(media)}").write_bytes(media)
+    console.print(f"fetched bundle {cid} -> {run_dir}")
+    return run_dir

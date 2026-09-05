@@ -227,6 +227,31 @@ def run(
         bundle=bundle,
     )
     (run_dir / "cache_keys.txt").write_text("\n".join(STATS.keys) + "\n", encoding="utf-8")
+    (run_dir / "search.json").write_text(
+        json.dumps(
+            {
+                "engines": list(engine_list),
+                "search_metadata": [m.__dict__ for m in outcome.meta],
+                "hints": [{"query": h.query, "kgmid": h.kgmid} for h in outcome.hints],
+                "identity": (
+                    {
+                        "qid": outcome.identity.qid,
+                        "label": outcome.identity.label,
+                        "handles": outcome.identity.author_tags(),
+                    }
+                    if outcome.identity
+                    else None
+                ),
+                "decision": {"accepted": decision.accepted, "reason": decision.reason},
+                "faces_in_query": outcome.faces_in_query,
+                "cache": STATS.summary(),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     console.print(f"evidence: {run_dir}")
     if bundle is None or winner is None:
         console.print(

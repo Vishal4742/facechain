@@ -1,0 +1,22 @@
+{
+  "signature": "2wRJXvnMAH9h6ZG9oXAa741mGtpkb3LwF35BdsVWm6rVogVzsciHfuA4pvegb2pKRHYg4eoqe78S752r3CnHEp7k",
+  "explorer": "https://explorer.solana.com/tx/2wRJXvnMAH9h6ZG9oXAa741mGtpkb3LwF35BdsVWm6rVogVzsciHfuA4pvegb2pKRHYg4eoqe78S752r3CnHEp7k?cluster=devnet",
+  "memo": "FACECHAIN/1 h=9830a8fbe625f39294e768d41bcf528ec499c7f73ab62b2301a9574435d7334d media=9d35a54d90cabb863eded7643b71be09a56ead8790ad13602b142d327527e3a5 cid=- sim=8777 url=https://www.instagram.com/p/Db6Jg25gffC",
+  "bundle_hash": "9830a8fbe625f39294e768d41bcf528ec499c7f73ab62b2301a9574435d7334d",
+  "bundle_cid": null,
+  "media_cid": null,
+  "registry": "9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX",
+  "rpc_url": "https://api.devnet.solana.com",
+  "anchored_at": 1788579267,
+  "seconds": 1.89,
+  "sas": {
+    "attestation": "5CiaguKGCsZafw9ofKenFbHS2qoNQJ2qeU3h38cKCD8c",
+    "signature": "ifP3xzEGLMzkQRxBum7QjhLrC4KmJkzUJ6c8icbt46JYgkCjwrVLAa5yCkz9iw7JxE1eur5eXSf2SmbxfExUhf3",
+    "nonce": "BF61JomqJoZTHhPBMjhTF4DTz3Xj63GisqCL4VXXvfRW",
+    "existed": false,
+    "credential": "Awhv5DjjmeeGZPxeMim1hW8yWKgMJtUFD2dX7BrArpzh",
+    "schema": "DNnsTXgmuPDsb3gKF8rgYsnRYP7h6qLEMC9udtxofpDD",
+    "explorer": "https://explorer.solana.com/tx/ifP3xzEGLMzkQRxBum7QjhLrC4KmJkzUJ6c8icbt46JYgkCjwrVLAa5yCkz9iw7JxE1eur5eXSf2SmbxfExUhf3?cluster=devnet",
+    "seconds": 12.31
+  }
+}

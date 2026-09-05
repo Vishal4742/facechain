@@ -1,0 +1,41 @@
+{
+  "engines": [
+    "lens",
+    "identity"
+  ],
+  "search_metadata": [
+    {
+      "type": "visual_matches",
+      "live": false,
+      "search_id": "6a9b8ad26539a2e75723d28b",
+      "created_at": "2026-09-05 03:21:54 UTC"
+    },
+    {
+      "type": "exact_matches",
+      "live": false,
+      "search_id": "6a9b8ad7f30d1363c7ab2709",
+      "created_at": "2026-09-05 03:21:59 UTC"
+    }
+  ],
+  "hints": [
+    {
+      "query": "Cristiano Ronaldo",
+      "kgmid": "/m/02xt6q"
+    }
+  ],
+  "identity": {
+    "qid": "Q11571",
+    "label": "Cristiano Ronaldo",
+    "handles": {
+      "x": "@Cristiano",
+      "instagram": "@cristiano",
+      "facebook": "@Cristiano"
+    }
+  },
+  "decision": {
+    "accepted": true,
+    "reason": "ACCEPT: sim 0.88 >= 0.45; 33 candidates >= 0.40"
+  },
+  "faces_in_query": 1,
+  "cache": "cache: 51 hits, 17 misses, SerpApi searches: 0"
+}

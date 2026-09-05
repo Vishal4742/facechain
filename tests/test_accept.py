@@ -86,3 +86,25 @@ def test_corroborate_marks_agreement_between_engines_on_same_url_or_author() -> 
     )  # same author @imVkohli from another engine
     assert "engine:lens:visual" in out[1].corroborated_by
     assert out[2].corroborated_by == ()
+
+
+def test_prioritise_puts_posts_first_and_interleaves_engines() -> None:
+    from facechain.pipeline import prioritise
+
+    lens = [
+        _cand(f"https://x.com/a/status/{i}", 0.5, engine="lens:visual", rank=i) for i in range(1, 4)
+    ]
+    ident = [
+        _cand(f"https://x.com/b/status/{i}", 0.5, engine="identity:x", rank=i) for i in range(1, 3)
+    ]
+    page = [_cand("https://news.example.com/story", 0.5, engine="lens:visual", rank=9)]
+    profile = [_cand("https://www.instagram.com/someone/", 0.5, engine="lens:visual", rank=8)]
+    ordered = prioritise(page + lens + profile + ident)
+    assert [c.engine for c in ordered[:4]] == [
+        "lens:visual",
+        "identity:x",
+        "lens:visual",
+        "identity:x",
+    ]
+    assert ordered[5].url == "https://www.instagram.com/someone"
+    assert ordered[-1].url == "https://news.example.com/story"

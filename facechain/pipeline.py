@@ -43,12 +43,27 @@ class NoFaceError(RuntimeError):
     """The query image contains no detectable face."""
 
 
+def _interleave(cands: list[Candidate]) -> list[Candidate]:
+    """Round-robin across engines so no single engine monopolises the verification budget."""
+    by_engine: dict[str, list[Candidate]] = {}
+    for cand in cands:
+        by_engine.setdefault(cand.engine, []).append(cand)
+    out: list[Candidate] = []
+    queues = list(by_engine.values())
+    while queues:
+        for queue in list(queues):
+            out.append(queue.pop(0))
+            if not queue:
+                queues.remove(queue)
+    return out
+
+
 def prioritise(cands: list[Candidate]) -> list[Candidate]:
-    """Social posts first, then social profiles, then other pages; engine order within each."""
+    """Social posts first, then social profiles, then other pages; engines interleaved."""
     posts = [c for c in cands if c.platform and c.is_post]
     profiles = [c for c in cands if c.platform and not c.is_post]
     others = [c for c in cands if not c.platform]
-    return posts + profiles + others
+    return _interleave(posts) + _interleave(profiles) + _interleave(others)
 
 
 NAME_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b")

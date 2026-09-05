@@ -32,7 +32,7 @@ Screen recording (plain terminal recording of a live run, 1 min 54 s, made with 
 
 ## Quickstart
 
-Linux or WSL2, Python 3.12, about 1 GB of disk for the face model. Node ≥ 22.6 (24 tested) is only needed for the optional attestation sidecar.
+Linux, WSL2 or native Windows (see below), Python 3.12+, about 1 GB of disk for the face model. Node ≥ 22.6 (24 tested) is only needed for the optional attestation sidecar.
 
 ```bash
 git clone https://github.com/Vishal4742/facechain && cd facechain
@@ -59,6 +59,21 @@ Keys and accounts:
 | `PINATA_JWT` | pinning the evidence to IPFS (optional; the sample run is pinned) | free plan at pinata.cloud |
 | Solana keypair | signing the devnet memo and attestation | `solana-keygen new`, fund at faucet.solana.com; path in `SOLANA_KEYPAIR_PATH` |
 | `SAS_CREDENTIAL`, `SAS_SCHEMA` | checking/creating attestations | pre-filled with the demo PDAs; `facechain setup-sas` creates your own |
+
+## Windows (native, tested)
+
+The pipeline runs natively on Windows too (tested 2026-09-05 with Python 3.13.12 and Node 26 on Windows 11: doctor, scan, live search, pinning, memo, attestation, VERIFIED, TAMPERED). From PowerShell in the checkout:
+
+```powershell
+python -m venv $env:USERPROFILE\venvs\facechain-win
+& $env:USERPROFILE\venvs\facechain-win\Scripts\python.exe -m pip install .
+# model pack: unzip buffalo_l.zip into %USERPROFILE%\.insightface\models\buffalo_l (5 .onnx files)
+# keypair: a devnet keypair JSON at %USERPROFILE%\.config\solana\id.json (or set SOLANA_KEYPAIR_PATH)
+$env:PYTHONUTF8 = "1"                       # post text contains emoji
+scripts\smoke.ps1 -Chain -Sas               # doctor, scan, live search, run, verify, tamper test
+```
+
+Notes: `--sas` needs Node ≥ 22.6 and `npm ci` inside `chain-ts\` (the sidecar is found in the current checkout, or via `FACECHAIN_SIDECAR`); the bash scripts and the VHS recording are Linux/WSL only; the WSL route (`wsl -- bash -lc "..."`) works as well.
 
 ## Commands
 
@@ -141,7 +156,7 @@ python scripts/calibrate.py --pos samples/kohli --neg samples/neg --markdown
 | impostor, 150 px thumbnail | 30 | -0.063 | 0.040 | 0.152 |
 
 - SerpApi's free plan allows 250 searches a month; responses are cached so a fresh run costs two searches.
-- Input is an image file. Webcam capture is not wired in (WSL2 has no camera access by default).
+- Input is an image file. Webcam capture is not wired in.
 - Devnet only; the registry key is a demo key and the memo is a hash commitment, not a legal attestation.
 - Candidate photos were tested during development to choose the demo subject; the winner in every run is chosen by the rule above, never by hand. The committed sample run replays the recorded live search of 2026-09-05 03:21 UTC (`search.json` shows the SerpApi ids and `live: false`); the screen recording uses `--live`.
 - `verify` trusts the registry named in `receipt.json` only when it is the demo registry; pass `--registry` to verify records signed by another wallet.

@@ -24,3 +24,9 @@ Date: 2026-09-05 (deadline 2026-09-07 23:59)
 ## Cut line status
 - Shipped: Lens (Path A), identity hop + X (Path B), memo, SAS attestation, Pinata pinning + `verify --cid` (live), tests, CI, README.
 - Cut: YouTube Data API, Google Vision, FaceCheck/Yandex, custom Anchor program.
+
+## Native Windows test (2026-09-05 04:50 UTC)
+- Windows 11, Python 3.13.12 (`C:\Python313`), Node 26.4, no Solana CLI (keypair file copied to `%USERPROFILE%\.config\solana\id.json`), model pack copied to `%USERPROFILE%\.insightface\models\buffalo_l`, venv `%USERPROFILE%\venvs\facechain-win` with a regular (non-editable) `pip install .`.
+- `scripts\smoke.ps1 -Chain -Sas`: doctor OK (cache `C:\Users\...\.cache\facechain`), scan 6.0 s cold, live search ACCEPT 0.88 (Instagram winner; exact_matches returned 0 that time and was correctly not cached), run: pinned media + bundle, memo tx `4fRfp9US…`, VERIFIED, TAMPERED.
+- Defect found and fixed: the SAS sidecar path was package-relative, so a regular install looked in `site-packages\chain-ts`. `sidecar_path()` now tries `FACECHAIN_SIDECAR`, the package-relative path, then `chain-ts\sas.ts` in the current directory. Re-run: attestation `CcYmwbmP…` created in 3.8 s, VERIFIED with attestation rows.
+- `PYTHONUTF8=1` is required on Windows consoles (emoji in tweet text); `smoke.ps1` sets it.

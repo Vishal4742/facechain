@@ -52,3 +52,5 @@ Append one line after every correction ("Update your CLAUDE.md so you don't make
 - Instagram `lookaside.*` image URLs from Lens return 403 anonymously; always fall back to the gstatic thumbnail.
 - Round-robin engines before the verification cut-off, or Lens posts starve the identity path.
 - The X syndication timeline rate-limits per IP for about an hour after a burst; cached pages are served even with `--live`.
+- Never resolve helper files relative to `__file__` alone: regular (non-editable) installs put the package in site-packages. Try an env override and the current checkout too (see `chain/sas.py::sidecar_path`).
+- Windows consoles need `PYTHONUTF8=1` for post text with emoji; `scripts/smoke.ps1` sets it.

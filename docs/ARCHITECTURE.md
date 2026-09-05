@@ -218,3 +218,14 @@ External accounts/keys: **SerpApi key (required, free)**, **Pinata JWT (recommen
 - Anchor 0.32.x notes — https://www.anchor-lang.com/docs/updates/release-notes/0-32-0
 - Pinata upload API — https://docs.pinata.cloud/api-reference/endpoint/upload-a-file
 - Devnet faucet — https://faucet.solana.com
+
+---
+
+## 13. Decisions changed during the build (2026-09-05)
+
+- Memo and attestation are **separate transactions** (sas-lib 1.0.x pins `@solana/kit` v5, incompatible with the memo program package); the memo stays in Python.
+- The attestation schema stores hashes as hex strings (`bundle_hash, cid, post_url, similarity_bps`); nonce = the 32 bytes of H.
+- Identity resolution goes by the Lens hint **name** with a Wikidata label match restricted to humans; the Knowledge Graph id (found inside the `related_content` link) is tried first but none of the demo subjects carry P2671.
+- Candidate media: platform image first, Google thumbnail fallback (Instagram's crawler URLs refuse anonymous fetches). A thumbnail-tolerant quality gate applies to candidates; the strict gate applies to the query face.
+- Verification order interleaves engines so Path B posts are verified alongside Path A posts.
+- Cut: Path C engines, Google Vision, YouTube Data API, custom Anchor program.

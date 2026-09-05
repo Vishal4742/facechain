@@ -90,3 +90,10 @@ def test_pick_query_face_largest_by_default_or_by_index() -> None:
         pick_query_face([])
     with pytest.raises(ValueError):
         pick_query_face([small], index=3)
+
+
+def test_lenient_gate_accepts_thumbnail_faces_that_the_strict_gate_rejects() -> None:
+    thumb_face = _face(det=0.55, ipd=14, blur=20)
+    assert quality_ok(thumb_face)[0] is False
+    assert quality_ok(thumb_face, strict=False) == (True, "ok")
+    assert quality_ok(_face(det=0.3), strict=False)[0] is False

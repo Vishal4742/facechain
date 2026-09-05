@@ -49,7 +49,7 @@ def verify_candidates(
             verified.append(replace(cand, band="no media"))
             continue
         faces = engine.embed_bytes(data)
-        good = [f for f in faces if quality_ok(f)[0]]
+        good = [f for f in faces if quality_ok(f, strict=False)[0]]
         pool = good or faces
         sim, _ = best_similarity(query_embedding, pool) if pool else (None, -1)
         scored = cand.with_similarity(

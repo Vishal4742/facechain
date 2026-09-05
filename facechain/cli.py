@@ -6,7 +6,9 @@ Commands are added phase by phase; `doctor` is the bootstrap check.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import time
 from pathlib import Path
 
 import click
@@ -24,7 +26,68 @@ MODEL_FILES = ("det_10g.onnx", "w600k_r50.onnx", "1k3d68.onnx", "2d106det.onnx",
 @click.group()
 @click.version_option(__version__, prog_name="facechain")
 def main() -> None:
-    """Face scan -> genuine social search -> face-verified match -> Solana devnet record -> verify."""
+    """Face scan -> genuine social search -> face-verified match -> Solana record -> verify."""
+
+
+@main.command()
+@click.option(
+    "--image",
+    "image_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Photo containing the face to identify.",
+)
+@click.option("--face-index", type=int, default=None, help="Pick this face instead of the largest.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+def scan(image_path: Path, face_index: int | None, as_json: bool) -> None:
+    """Detect faces in an image, report quality, and choose the query face."""
+    from .face.engine import get_engine
+    from .face.match import pick_query_face, quality_ok
+
+    data = image_path.read_bytes()
+    face_id = hashlib.sha256(data).hexdigest()
+    started = time.perf_counter()
+    faces = get_engine().embed_bytes(data)
+    elapsed = time.perf_counter() - started
+    if not faces:
+        console.print(f"[red]no face detected in {image_path}[/red]")
+        raise SystemExit(2)
+    chosen = pick_query_face(faces, face_index)
+    chosen_idx = faces.index(chosen)
+
+    if as_json:
+        payload = {
+            "image": str(image_path),
+            "face_id": face_id,
+            "seconds": round(elapsed, 2),
+            "query_index": chosen_idx,
+            "faces": [
+                {**f.to_dict(), "quality": quality_ok(f)[1], "index": i}
+                for i, f in enumerate(faces)
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    table = Table(title=f"faces in {image_path.name}")
+    for col in ("#", "bbox", "det", "ipd px", "blur", "quality", "query"):
+        table.add_column(col)
+    for i, f in enumerate(faces):
+        ok, reason = quality_ok(f)
+        table.add_row(
+            str(i),
+            " ".join(str(int(v)) for v in f.bbox),
+            f"{f.det_score:.2f}",
+            f"{f.ipd_px:.0f}",
+            f"{f.blur_var:.0f}",
+            "[green]ok[/green]" if ok else f"[yellow]{reason}[/yellow]",
+            "[bold]*[/bold]" if i == chosen_idx else "",
+        )
+    console.print(table)
+    console.print(
+        f"{len(faces)} face(s) in {elapsed:.1f}s; query = face #{chosen_idx}; "
+        f"face_id = {face_id[:16]}..."
+    )
 
 
 def _keypair_pubkey(path: Path) -> str | None:

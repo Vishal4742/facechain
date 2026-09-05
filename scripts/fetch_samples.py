@@ -26,7 +26,7 @@ MANIFEST: dict[str, list[str]] = {
     "kohli": [
         "Virat Kohli portrait.jpg",
         "Virat Kohli in PMO New Delhi.jpg",
-        "Virat Kohli during the India vs Aus 4th Test match at Narendra Modi Stadium on 09 March 2023.jpg",
+        "Virat Kohli during the India vs Aus 4th Test match at Narendra Modi Stadium on 09 March 2023.jpg",  # noqa: E501
         "Virat Kohli in New Delhi in December 2018.jpg",
         "VIRAT KOHLI JAN 2015 (cropped).jpg",
     ],
@@ -170,7 +170,7 @@ def main() -> int:
         "# Sample image sources",
         "",
         "All images come from Wikimedia Commons under the licence listed. They are used only to",
-        "develop and demonstrate the pipeline. Regenerate this file with `python3 scripts/fetch_samples.py`.",
+        "develop and demonstrate the pipeline. Regenerate this file with `python3 scripts/fetch_samples.py`.",  # noqa: E501
         "",
         "| subject | local file | licence | author | date | source |",
         "|---|---|---|---|---|---|",

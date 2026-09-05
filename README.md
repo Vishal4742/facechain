@@ -28,7 +28,7 @@ Reverse image search only *proposes* pages. What decides is the ArcFace similari
 
 ## Demo
 
-Screen recording: _link to be added at submission_.
+Screen recording (plain terminal recording of a live run, 1 min 54 s, made with [VHS](https://github.com/charmbracelet/vhs) from `scripts/demo.tape`): [demo/facechain-demo.mp4](https://github.com/Vishal4742/facechain/blob/main/demo/facechain-demo.mp4) ([direct file](https://github.com/Vishal4742/facechain/raw/main/demo/facechain-demo.mp4)). It shows: face scan → live Google Lens search (SerpApi ids and timestamps on screen) → identity hop → face-verified ranking → ACCEPT → IPFS pins → devnet memo + attestation → `sha256sum bundle.json` equals the on-chain `h=` → memo read back with the Solana CLI → VERIFIED → tamper test → TAMPERED.
 
 ## Quickstart
 

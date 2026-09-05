@@ -5,18 +5,18 @@
 Output demo/facechain-demo.mp4
 
 Set Shell "bash"
-Set FontSize 17
+Set FontSize 16
 Set FontFamily "DejaVu Sans Mono"
-Set Width 1600
-Set Height 900
-Set Padding 18
+Set Width 1440
+Set Height 840
+Set Padding 16
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 40ms
+Set TypingSpeed 35ms
 Set WindowBar Colorful
-Set WindowBarSize 36
+Set WindowBarSize 34
 
 Hide
-Type "source ~/.venvs/facechain/bin/activate && cd /mnt/d/HHGOA/facechain && export PS1='\[\e[1;35m\]facechain\[\e[0m\] $ ' && clear"
+Type "cd /mnt/d/HHGOA/facechain && source ~/.venvs/facechain/bin/activate && source scripts/demo_helpers.sh && export PYTHONWARNINGS=ignore PS1='facechain > ' && clear"
 Enter
 Sleep 1s
 Show
@@ -27,36 +27,39 @@ Sleep 2s
 
 Type "facechain scan --image samples/ronaldo/subject.jpg"
 Enter
-Wait+Screen@60s /face\(s\) in/
+Wait@90s /facechain >\s*$/
 Sleep 3s
 
 Type "facechain run --image samples/ronaldo/subject.jpg --live --engines lens,identity --sas"
 Enter
-Wait+Screen@240s /(explorer: .*\n.*explorer:|search failed|not accepted)/
+Wait@400s /facechain >\s*$/
 Sleep 6s
 
-Type "RUN=$(ls -td evidence/2* | grep -v _tampered | head -1); echo $RUN"
+Type "RUN=$(demo_run_dir); echo $RUN"
 Enter
+Wait@10s /facechain >\s*$/
 Sleep 1s
 Type "sha256sum $RUN/bundle.json   # must equal h= in the on-chain memo"
 Enter
+Wait@10s /facechain >\s*$/
 Sleep 4s
 
-Type "solana confirm -v $(python -c \"import json;print(json.load(open('$RUN/receipt.json'))['signature'])\") -u devnet | grep -E 'Program log: Memo|Status|Block Time' | cut -c1-150"
+Type "demo_memo_log $RUN   # read the memo back from the transaction logs (solana CLI)"
 Enter
-Wait+Screen@60s /Memo|Status/
+Wait@120s /facechain >\s*$/
 Sleep 5s
 
 Type "facechain verify --run $RUN"
 Enter
-Wait+Screen@120s /VERIFIED|TAMPERED|UNANCHORED/
+Wait@180s /facechain >\s*$/
 Sleep 6s
 
 Type "facechain verify --run $RUN --tamper"
 Enter
-Wait+Screen@120s /TAMPERED|VERIFIED/
+Wait@180s /facechain >\s*$/
 Sleep 6s
 
-Type "cat $RUN/receipt.json | python -c \"import json,sys; r=json.load(sys.stdin); print('explorer:', r['explorer']); print('attestation:', r['sas']['attestation']); print('bundle CID:', r['bundle_cid'])\""
+Type "demo_links $RUN"
 Enter
-Sleep 6s
+Wait@10s /facechain >\s*$/
+Sleep 7s

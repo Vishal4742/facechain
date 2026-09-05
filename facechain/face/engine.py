@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import sys
 import threading
 from typing import Any
 
@@ -56,7 +55,8 @@ class FaceEngine:
     def __init__(self, name: str = MODEL_NAME, det_thresh: float = DEFAULT_DET_THRESH) -> None:
         from insightface.app import FaceAnalysis
 
-        with contextlib.redirect_stdout(sys.stderr):  # model chatter must not corrupt --json
+        chatter = io.StringIO()  # model-loading chatter is noise for users; errors still raise
+        with contextlib.redirect_stdout(chatter), contextlib.redirect_stderr(chatter):
             self.app = FaceAnalysis(
                 name=name,
                 allowed_modules=["detection", "recognition"],

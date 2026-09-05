@@ -202,7 +202,7 @@ def search_lens(
                 if data.get("visual_matches") or data.get("exact_matches"):
                     cache.put_json("serpapi.lens", params, data, meta={"engine": "google_lens"})
                 else:
-                    emit(f"lens {type_}: empty result not cached (transient?)", "warn")
+                    emit(f"lens {type_}: Google returned no results this time (not cached)", "warn")
         except CacheMiss:
             raise
         except (http.HttpError, LensError) as exc:

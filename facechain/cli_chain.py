@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from .cache import STATS, Cache
+from .cache import STATS, Cache, CacheMiss
 from .chain import ipfs
 from .chain.memo import explorer_url, format_memo, load_keypair, send_memo
 from .chain.verify import read_receipt, render_report, verify_run
@@ -24,6 +24,8 @@ from .evidence.bundle import (
     tamper_copy,
     write_evidence,
 )
+from .http import HttpError, redact
+from .search.lens import LensError
 
 console = Console()
 
@@ -103,6 +105,8 @@ def run(
     from .pipeline import NoFaceError, run_search
     from .search.rank import render_table
 
+    if live and offline:
+        raise click.UsageError("--live and --offline are mutually exclusive")
     settings = load()
     cache = Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
     STATS.reset()
@@ -121,6 +125,9 @@ def run(
     except NoFaceError as exc:
         console.print(f"[red]{exc}[/red]")
         raise SystemExit(2) from exc
+    except (LensError, HttpError, CacheMiss, ValueError) as exc:
+        console.print(f"[bold red]search failed: {redact(str(exc))}[/bold red]")
+        raise SystemExit(3) from exc
 
     console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
     decision = outcome.decision

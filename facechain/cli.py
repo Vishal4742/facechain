@@ -1,6 +1,7 @@
 """facechain command-line interface.
 
-Commands are added phase by phase; `doctor` is the bootstrap check.
+Pipeline commands live here (scan, doctor, search, run); the chain-only commands (anchor, verify,
+attest, setup-sas) are registered from `cli_chain`.
 """
 
 from __future__ import annotations
@@ -9,7 +10,9 @@ import asyncio
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import click
 from rich.console import Console
@@ -17,15 +20,49 @@ from rich.table import Table
 
 from . import __version__
 from .cache import STATS, Cache, CacheMiss
+from .chain import ipfs
+from .cli_chain import anchor, anchor_run, attest_cmd, require_sas_or_exit, setup_sas_cmd, verify
 from .config import Settings, load
+from .evidence.bundle import build_bundle, bundle_hash, media_suffix, new_run_id, write_evidence
 from .http import HttpError, redact
-from .search.lens import LensError
+from .search.lens import LensError, account_searches_left
+
+if TYPE_CHECKING:
+    from .pipeline import SearchOutcome
 
 ENGINE_ERRORS = (LensError, HttpError, CacheMiss, ValueError)
 
 console = Console()
 MODEL_DIR = Path.home() / ".insightface/models/buffalo_l"
 MODEL_FILES = ("det_10g.onnx", "w600k_r50.onnx", "1k3d68.onnx", "2d106det.onnx", "genderage.onnx")
+
+image_option = click.option(
+    "--image",
+    "image_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Photo containing the face to identify.",
+)
+face_index_option = click.option(
+    "--face-index", type=int, default=None, help="Pick this face instead of the largest."
+)
+SEARCH_OPTIONS = (
+    image_option,
+    click.option("--engines", default="lens", show_default=True, help="Comma-separated engines."),
+    click.option("--max-candidates", default=40, show_default=True, type=int),
+    face_index_option,
+    click.option(
+        "--live", is_flag=True, help="Bypass cache reads: every search is live (on camera)."
+    ),
+    click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss."),
+)
+
+
+def search_options(f: Callable[..., Any]) -> Callable[..., Any]:
+    """The options `search` and `run` share, in this order."""
+    for option in reversed(SEARCH_OPTIONS):
+        f = option(f)
+    return f
 
 
 @click.group()
@@ -35,14 +72,8 @@ def main() -> None:
 
 
 @main.command()
-@click.option(
-    "--image",
-    "image_path",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Photo containing the face to identify.",
-)
-@click.option("--face-index", type=int, default=None, help="Pick this face instead of the largest.")
+@image_option
+@face_index_option
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
 def scan(image_path: Path, face_index: int | None, as_json: bool) -> None:
     """Detect faces in an image, report quality, and choose the query face."""
@@ -201,47 +232,28 @@ def _event_printer(level: str, message: str) -> None:
     console.print(f"[{style}]{message}[/{style}]")
 
 
-def _make_cache(settings: Settings, *, live: bool, offline: bool) -> Cache:
-    return Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
-
-
-@main.command()
-@click.option(
-    "--image",
-    "image_path",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Photo containing the face to identify.",
-)
-@click.option("--engines", default="lens", show_default=True, help="Comma-separated engines.")
-@click.option("--max-candidates", default=40, show_default=True, type=int)
-@click.option("--face-index", type=int, default=None, help="Pick this face instead of the largest.")
-@click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
-@click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
-@click.option("--json", "json_out", type=click.Path(dir_okay=False, path_type=Path), default=None)
-def search(
-    image_path: Path,
+def _search(
+    settings: Settings,
+    image_bytes: bytes,
+    label: str,
+    *,
     engines: str,
     max_candidates: int,
     face_index: int | None,
     live: bool,
     offline: bool,
-    json_out: Path | None,
-) -> None:
-    """Find social posts showing this face: reverse image search + face verification."""
+) -> SearchOutcome:
+    """Shared by `search` and `run`: run the pipeline, print the ranked table and the decision."""
     from .pipeline import NoFaceError, run_search
-    from .search.lens import account_searches_left
     from .search.rank import render_table
 
     if live and offline:
         raise click.UsageError("--live and --offline are mutually exclusive")
-    settings = load()
-    cache = _make_cache(settings, live=live, offline=offline)
+    cache = Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
     STATS.reset()
-    started = time.perf_counter()
     try:
         outcome = run_search(
-            image_path.read_bytes(),
+            image_bytes,
             settings,
             cache,
             engines=tuple(e.strip() for e in engines.split(",") if e.strip()),
@@ -255,11 +267,38 @@ def search(
     except ENGINE_ERRORS as exc:
         console.print(f"[bold red]search failed: {redact(str(exc))}[/bold red]")
         raise SystemExit(3) from exc
+    console.print(render_table(outcome.candidates, title=f"candidates for {label}"))
+    style = "bold green" if outcome.decision.accepted else "bold yellow"
+    console.print(f"[{style}]{outcome.decision.reason}[/{style}]")
+    return outcome
 
-    console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
+
+@main.command()
+@search_options
+@click.option("--json", "json_out", type=click.Path(dir_okay=False, path_type=Path), default=None)
+def search(
+    image_path: Path,
+    engines: str,
+    max_candidates: int,
+    face_index: int | None,
+    live: bool,
+    offline: bool,
+    json_out: Path | None,
+) -> None:
+    """Find social posts showing this face: reverse image search + face verification."""
+    settings = load()
+    started = time.perf_counter()
+    outcome = _search(
+        settings,
+        image_path.read_bytes(),
+        image_path.name,
+        engines=engines,
+        max_candidates=max_candidates,
+        face_index=face_index,
+        live=live,
+        offline=offline,
+    )
     decision = outcome.decision
-    style = "bold green" if decision.accepted else "bold yellow"
-    console.print(f"[{style}]{decision.reason}[/{style}]")
     if decision.winner is not None:
         console.print(f"winner: {decision.winner.url}")
     console.print(f"{STATS.summary()}; {time.perf_counter() - started:.1f}s")
@@ -286,17 +325,121 @@ def search(
     raise SystemExit(0 if decision.accepted else 2)
 
 
-from .cli_chain import anchor as _anchor  # noqa: E402
-from .cli_chain import attest_cmd as _attest  # noqa: E402
-from .cli_chain import run as _run  # noqa: E402
-from .cli_chain import setup_sas_cmd as _setup_sas  # noqa: E402
-from .cli_chain import verify as _verify  # noqa: E402
+@main.command()
+@search_options
+@click.option("--no-anchor", is_flag=True, help="Stop after writing evidence; skip the chain.")
+@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
+@click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
+def run(
+    image_path: Path,
+    engines: str,
+    max_candidates: int,
+    face_index: int | None,
+    live: bool,
+    offline: bool,
+    no_anchor: bool,
+    no_pin: bool,
+    sas: bool,
+) -> None:
+    """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo [+ SAS]."""
+    settings = load()
+    if sas and not no_anchor:
+        require_sas_or_exit(settings)  # fail before spending a search or a memo
+    image_bytes = image_path.read_bytes()
+    outcome = _search(
+        settings,
+        image_bytes,
+        image_path.name,
+        engines=engines,
+        max_candidates=max_candidates,
+        face_index=face_index,
+        live=live,
+        offline=offline,
+    )
+    decision = outcome.decision
+    console.print(STATS.summary())
 
-main.add_command(_run, "run")
-main.add_command(_anchor, "anchor")
-main.add_command(_verify, "verify")
-main.add_command(_setup_sas, "setup-sas")
-main.add_command(_attest, "attest")
+    run_id = new_run_id()
+    run_dir = settings.evidence_dir / run_id
+    winner = decision.winner if decision.accepted else None
+    bundle = None
+    if winner is not None:
+        media_cid: str | None = None
+        if (
+            settings.pinata_jwt
+            and not no_pin
+            and winner.media_bytes
+            and not (offline or settings.offline)
+        ):
+            suffix = media_suffix(winner.media_bytes)
+            media_cid = ipfs.pin_bytes(
+                winner.media_bytes,
+                jwt=settings.pinata_jwt,
+                name=f"{run_id}-post_media{suffix}",
+                content_type="image/jpeg" if suffix == ".jpg" else "application/octet-stream",
+            )
+            console.print(
+                f"[green]pinned post media: {media_cid}[/green]"
+                if media_cid
+                else "[yellow]Pinata media upload failed; media_cid stays null[/yellow]"
+            )
+        bundle = build_bundle(
+            face_id=outcome.face_id,
+            winner=winner,
+            threshold_bps=round(settings.match_threshold * 10_000),
+            candidates_considered=len(outcome.candidates),
+            found_at=int(time.time()),
+            engines=outcome.engines,
+            media_cid=media_cid,
+        )
+    write_evidence(
+        run_dir,
+        query_bytes=image_bytes,
+        query_suffix=image_path.suffix.lower(),
+        candidates=outcome.candidates,
+        winner=winner,
+        bundle=bundle,
+    )
+    (run_dir / "cache_keys.txt").write_text("\n".join(STATS.keys) + "\n", encoding="utf-8")
+    (run_dir / "search.json").write_text(
+        json.dumps(
+            {
+                "engines": list(outcome.engines),
+                "search_metadata": [m.__dict__ for m in outcome.meta],
+                "hints": [{"query": h.query, "kgmid": h.kgmid} for h in outcome.hints],
+                "identity": (
+                    {
+                        "qid": outcome.identity.qid,
+                        "label": outcome.identity.label,
+                        "handles": outcome.identity.author_tags(),
+                    }
+                    if outcome.identity
+                    else None
+                ),
+                "decision": {"accepted": decision.accepted, "reason": decision.reason},
+                "faces_in_query": outcome.faces_in_query,
+                "cache": STATS.summary(),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    console.print(f"evidence: {run_dir}")
+    if bundle is None or winner is None:
+        console.print(
+            "[yellow]not accepted: evidence written for review, nothing anchored[/yellow]"
+        )
+        raise SystemExit(2)
+    console.print(f"winner: {winner.url}\nbundle sha256 (H): {bundle_hash(bundle)}")
+    if no_anchor:
+        raise SystemExit(0)
+    anchor_run(run_dir, settings, pin=not no_pin, sas=sas)
+
+
+for command in (anchor, verify, setup_sas_cmd, attest_cmd):
+    main.add_command(command)
 
 if __name__ == "__main__":  # `python -m facechain.cli` (worktrees without a console script)
     main()

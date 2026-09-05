@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 from .. import http
-from ..cache import Cache, CacheMiss
+from ..cache import Cache
 from .base import Candidate
 
 MAX_MEDIA_BYTES = 10 * 1024 * 1024
@@ -21,10 +21,7 @@ def _with_size(url: str) -> str:
 
 def media_urls_for(cand: Candidate) -> list[str]:
     """Platform image first (full resolution), Google's thumbnail second (always fetchable)."""
-    urls: list[str] = []
-    for url in (cand.media_url, cand.thumbnail_url):
-        if url and url not in urls:
-            urls.append(url)
+    urls = dict.fromkeys(u for u in (cand.media_url, cand.thumbnail_url) if u)
     return [_with_size(u) for u in urls]
 
 
@@ -39,9 +36,7 @@ def download_media(cand: Candidate, cache: Cache) -> bytes | None:
                 ),
                 meta={"candidate": cand.url},
             )
-        except CacheMiss:
-            continue
-        except Exception:  # noqa: BLE001 - one bad CDN must not kill the whole search
+        except Exception:  # noqa: BLE001 - offline miss or one bad CDN must not kill the search
             continue
         if data:
             return data
@@ -52,8 +47,6 @@ def download_all(
     cands: list[Candidate], cache: Cache, *, workers: int = 8
 ) -> dict[str, bytes | None]:
     """Media bytes per canonical candidate URL; failures are None, never exceptions."""
-    if not cands:
-        return {}
     with ThreadPoolExecutor(max_workers=max(1, min(workers, len(cands)))) as pool:
         results = pool.map(lambda c: (c.url, download_media(c, cache)), cands)
     return dict(results)

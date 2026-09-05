@@ -132,7 +132,7 @@ Every network response is cached under `~/.cache/facechain`, keyed by a hash of 
 
 ## Development
 
-The repo carries its engineering harness: `CLAUDE.md`, per-phase notes in `notes/`, ECC rules under `.claude/rules/ecc`, custom commands and agents under `.claude/`. Tests are written before implementations for the pure modules.
+The repo carries its engineering harness: `CLAUDE.md`, per-phase notes in `notes/`, ECC rules under `.claude/rules/ecc`, the Ponytail plugin (YAGNI ladder; a whole-repo audit cut 128 lines with all checks green), custom commands and agents under `.claude/`. Tests are written before implementations for the pure modules.
 
 ```bash
 pytest -q --cov=facechain          # 100+ tests; model-backed tests skip without the model pack

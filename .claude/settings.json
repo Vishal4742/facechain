@@ -1,15 +1,4 @@
 {
-  "extraKnownMarketplaces": {
-    "ecc": {
-      "source": {
-        "source": "github",
-        "repo": "affaan-m/ECC"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "ecc@ecc": true
-  },
   "permissions": {
     "allow": [
       "Bash(pytest:*)",
@@ -48,5 +37,23 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "ecc@ecc": true,
+    "ponytail@ponytail": true
+  },
+  "extraKnownMarketplaces": {
+    "ecc": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/ECC"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    }
   }
 }

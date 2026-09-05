@@ -148,8 +148,7 @@ def load_bundle(path: Path) -> dict[str, Any]:
 
 
 def find_media(run_dir: Path) -> Path | None:
-    matches = sorted(run_dir.glob("post_media.*"))
-    return matches[0] if matches else None
+    return min(run_dir.glob("post_media.*"), default=None)
 
 
 @dataclass(frozen=True)

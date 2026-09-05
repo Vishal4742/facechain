@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlparse
 
@@ -147,17 +147,9 @@ def author_of(url: str) -> str | None:
     return None
 
 
-def filter_social(cands: Iterable[Candidate]) -> list[Candidate]:
-    return [c for c in cands if c.platform is not None]
-
-
 def dedupe(cands: Sequence[Candidate]) -> list[Candidate]:
     """Keep the first occurrence of each canonical URL (input order == engine rank order)."""
-    seen: set[str] = set()
-    out: list[Candidate] = []
+    first: dict[str, Candidate] = {}
     for cand in cands:
-        if cand.url in seen:
-            continue
-        seen.add(cand.url)
-        out.append(cand)
-    return out
+        first.setdefault(cand.url, cand)
+    return list(first.values())

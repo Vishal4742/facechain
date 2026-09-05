@@ -21,6 +21,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { text } from "node:stream/consumers";
 
 import {
   appendTransactionMessageInstructions,
@@ -328,15 +329,6 @@ const COMMANDS: Record<string, (input: Json) => Promise<Json>> = {
   fetch: fetchRecord,
 };
 
-async function readStdin(): Promise<string> {
-  const chunks: string[] = [];
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) {
-    chunks.push(String(chunk));
-  }
-  return chunks.join("");
-}
-
 function describeError(error: unknown): string {
   if (error instanceof SidecarError) {
     return error.message;
@@ -351,7 +343,7 @@ function describeError(error: unknown): string {
 }
 
 async function main(): Promise<void> {
-  const raw = (await readStdin()).trim();
+  const raw = (await text(process.stdin)).trim();
   if (raw.length === 0) {
     throw new SidecarError("expected a JSON command on stdin");
   }

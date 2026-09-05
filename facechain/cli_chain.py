@@ -1,4 +1,7 @@
-"""CLI commands that touch evidence and the chain: run, anchor, attest, verify, setup-sas."""
+"""CLI commands that touch the chain: anchor, attest, verify, setup-sas.
+
+`facechain run` (cli.py) ends in `anchor_run` from here.
+"""
 
 from __future__ import annotations
 
@@ -12,23 +15,13 @@ from typing import Any
 import click
 from rich.console import Console
 
-from .cache import STATS, Cache, CacheMiss
+from .cache import Cache
 from .chain import ipfs
 from .chain.memo import explorer_url, format_memo, load_keypair, send_memo
 from .chain.sas import SasError, attest, require_sas, setup_sas
 from .chain.verify import read_receipt, render_report, verify_run
 from .config import Settings, load
-from .evidence.bundle import (
-    build_bundle,
-    bundle_hash,
-    load_bundle,
-    media_suffix,
-    new_run_id,
-    tamper_copy,
-    write_evidence,
-)
-from .http import HttpError, redact
-from .search.lens import LensError
+from .evidence.bundle import bundle_hash, load_bundle, media_suffix, tamper_copy
 
 console = Console()
 DEFAULT_REGISTRY = "9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX"  # the demo registry wallet
@@ -37,23 +30,14 @@ DEFAULT_REGISTRY = "9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX"  # the demo re
 def _settings_with_receipt_sas(settings: Settings, receipt: dict[str, Any] | None) -> Settings:
     """Verification uses the credential/schema recorded in the receipt, else .env, else nothing."""
     sas = (receipt or {}).get("sas") or {}
-    credential = sas.get("credential") or settings.sas_credential
-    schema = sas.get("schema") or settings.sas_schema
-    if credential == settings.sas_credential and schema == settings.sas_schema:
-        return settings
-    return replace(settings, sas_credential=credential, sas_schema=schema)
+    return replace(
+        settings,
+        sas_credential=sas.get("credential") or settings.sas_credential,
+        sas_schema=sas.get("schema") or settings.sas_schema,
+    )
 
 
-def _event_printer(level: str, message: str) -> None:
-    style = {"error": "bold red", "warn": "yellow"}.get(level, "dim")
-    console.print(f"[{style}]{message}[/{style}]")
-
-
-def _registry_pubkey(settings: Settings) -> str:
-    return str(load_keypair(settings.solana_keypair_path).pubkey())
-
-
-def _require_sas_or_exit(settings: Settings) -> None:
+def require_sas_or_exit(settings: Settings) -> None:
     try:
         require_sas(settings)
     except SasError as exc:
@@ -101,7 +85,7 @@ def anchor_run(
 ) -> dict[str, object]:
     """Pin bundle.json (if Pinata is configured), send the memo, write receipt.json (+ SAS)."""
     if sas:
-        _require_sas_or_exit(settings)
+        require_sas_or_exit(settings)
     bundle = load_bundle(run_dir / "bundle.json")
     h = bundle_hash(bundle)
     post, match = bundle["post"], bundle["match"]
@@ -138,148 +122,6 @@ def anchor_run(
     if sas:
         receipt["sas"] = attest_run(run_dir, settings, cid=bundle_cid)
     return receipt
-
-
-@click.command()
-@click.option(
-    "--image",
-    "image_path",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-)
-@click.option("--engines", default="lens", show_default=True)
-@click.option("--max-candidates", default=40, show_default=True, type=int)
-@click.option("--face-index", type=int, default=None)
-@click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
-@click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
-@click.option("--no-anchor", is_flag=True, help="Stop after writing evidence; skip the chain.")
-@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
-@click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
-def run(
-    image_path: Path,
-    engines: str,
-    max_candidates: int,
-    face_index: int | None,
-    live: bool,
-    offline: bool,
-    no_anchor: bool,
-    no_pin: bool,
-    sas: bool,
-) -> None:
-    """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo [+ SAS]."""
-    from .pipeline import NoFaceError, run_search
-    from .search.rank import render_table
-
-    if live and offline:
-        raise click.UsageError("--live and --offline are mutually exclusive")
-    settings = load()
-    if sas and not no_anchor:
-        _require_sas_or_exit(settings)  # fail before spending a search or a memo
-    cache = Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
-    STATS.reset()
-    engine_list = tuple(e.strip() for e in engines.split(",") if e.strip())
-    image_bytes = image_path.read_bytes()
-    try:
-        outcome = run_search(
-            image_bytes,
-            settings,
-            cache,
-            engines=engine_list,
-            max_candidates=max_candidates,
-            face_index=face_index,
-            on_event=_event_printer,
-        )
-    except NoFaceError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise SystemExit(2) from exc
-    except (LensError, HttpError, CacheMiss, ValueError) as exc:
-        console.print(f"[bold red]search failed: {redact(str(exc))}[/bold red]")
-        raise SystemExit(3) from exc
-
-    console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
-    decision = outcome.decision
-    style = "bold green" if decision.accepted else "bold yellow"
-    console.print(f"[{style}]{decision.reason}[/{style}]")
-    console.print(STATS.summary())
-
-    run_id = new_run_id()
-    run_dir = settings.evidence_dir / run_id
-    winner = decision.winner if decision.accepted else None
-    bundle = None
-    if winner is not None:
-        media_cid: str | None = None
-        if (
-            settings.pinata_jwt
-            and not no_pin
-            and winner.media_bytes
-            and not (offline or settings.offline)
-        ):
-            media_cid = ipfs.pin_bytes(
-                winner.media_bytes,
-                jwt=settings.pinata_jwt,
-                name=f"{run_id}-post_media{media_suffix(winner.media_bytes)}",
-                content_type="image/jpeg"
-                if media_suffix(winner.media_bytes) == ".jpg"
-                else "application/octet-stream",
-            )
-            console.print(
-                f"[green]pinned post media: {media_cid}[/green]"
-                if media_cid
-                else "[yellow]Pinata media upload failed; media_cid stays null[/yellow]"
-            )
-        bundle = build_bundle(
-            face_id=outcome.face_id,
-            winner=winner,
-            threshold_bps=round(settings.match_threshold * 10_000),
-            candidates_considered=len(outcome.candidates),
-            found_at=int(time.time()),
-            engines=engine_list,
-            media_cid=media_cid,
-        )
-    write_evidence(
-        run_dir,
-        query_bytes=image_bytes,
-        query_suffix=image_path.suffix.lower(),
-        candidates=outcome.candidates,
-        winner=winner,
-        bundle=bundle,
-    )
-    (run_dir / "cache_keys.txt").write_text("\n".join(STATS.keys) + "\n", encoding="utf-8")
-    (run_dir / "search.json").write_text(
-        json.dumps(
-            {
-                "engines": list(engine_list),
-                "search_metadata": [m.__dict__ for m in outcome.meta],
-                "hints": [{"query": h.query, "kgmid": h.kgmid} for h in outcome.hints],
-                "identity": (
-                    {
-                        "qid": outcome.identity.qid,
-                        "label": outcome.identity.label,
-                        "handles": outcome.identity.author_tags(),
-                    }
-                    if outcome.identity
-                    else None
-                ),
-                "decision": {"accepted": decision.accepted, "reason": decision.reason},
-                "faces_in_query": outcome.faces_in_query,
-                "cache": STATS.summary(),
-            },
-            indent=2,
-            ensure_ascii=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    console.print(f"evidence: {run_dir}")
-    if bundle is None or winner is None:
-        console.print(
-            "[yellow]not accepted: evidence written for review, nothing anchored[/yellow]"
-        )
-        raise SystemExit(2)
-    console.print(f"winner: {winner.url}\nbundle sha256 (H): {bundle_hash(bundle)}")
-    if no_anchor:
-        raise SystemExit(0)
-    anchor_run(run_dir, settings, pin=not no_pin, sas=sas)
 
 
 @click.command()
@@ -347,7 +189,7 @@ def verify(
 def attest_cmd(run_dir: Path) -> None:
     """Create the SAS attestation for an already anchored run (no new memo)."""
     settings = load()
-    _require_sas_or_exit(settings)
+    require_sas_or_exit(settings)
     attest_run(run_dir, settings)
 
 

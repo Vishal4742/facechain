@@ -17,8 +17,6 @@ LENIENT_DET_SCORE = 0.50
 LENIENT_IPD_PX = 12.0
 LENIENT_BLUR_VAR = 15.0
 
-Band = str  # "match" | "review" | "reject"
-
 
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity in [-1, 1]; safe for un-normalised or zero vectors."""
@@ -31,7 +29,7 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(va, vb) / (na * nb))
 
 
-def band(sim: float, *, match_thr: float, review_thr: float) -> Band:
+def band(sim: float, *, match_thr: float, review_thr: float) -> str:
     if sim >= match_thr:
         return "match"
     if sim >= review_thr:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 from ..face.match import band as _band
@@ -98,20 +98,5 @@ class Candidate:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "url": self.url,
-            "platform": self.platform,
-            "is_post": self.is_post,
-            "author": self.author,
-            "title": self.title,
-            "text": self.text,
-            "media_url": self.media_url,
-            "thumbnail_url": self.thumbnail_url,
-            "engine": self.engine,
-            "engine_rank": self.engine_rank,
-            "similarity_bps": self.similarity_bps,
-            "faces_found": self.faces_found,
-            "band": self.band,
-            "corroborated_by": list(self.corroborated_by),
-            "media_sha256": self.media_sha256,
-        }
+        """Every field except the repr=False payloads (media_bytes, raw); JSON-ready."""
+        return {f.name: getattr(self, f.name) for f in fields(self) if f.repr}

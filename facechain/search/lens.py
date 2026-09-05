@@ -209,8 +209,6 @@ def search_lens(
                     cache.put_json("serpapi.lens", params, data, meta={"engine": "google_lens"})
                 else:
                     emit(f"lens {type_}: Google returned no results this time (not cached)", "warn")
-        except CacheMiss:
-            raise
         except (http.HttpError, LensError) as exc:
             replay = fixtures.get_json("serpapi.lens", params) if fixtures is not None else None
             if replay is None:

@@ -6,7 +6,7 @@ Date: 2026-09-05
 - `evidence/bundle.py` — run ids (`%Y%m%dT%H%M%SZ-<4hex>`), canonical bytes, `bundle_hash`, `assert_hashable` (ints/strings only, floats rejected), `build_bundle` (query/post/match sections, no git commit), `write_evidence` (query, candidates.json, post_media.<ext>, post.json, bundle.json = exact canonical bytes), `verify_local` (re-hash stored files, never re-download), `tamper_copy` (flip the middle byte of the media).
 - `chain/memo.py` — memo text `FACECHAIN/1 h=… media=… cid=… sim=… url=…` (≤ 500 bytes, URL truncated last), regex parser that accepts the `[len] ` prefix from `getSignaturesForAddress`, `send_memo` (one-shot build/sign/send with one retry on blockhash/429), `find_memo` (wallet scan at confirmed commitment with a short retry), `tx_memo` (jsonParsed lookup: signer, slot, blockTime).
 - `chain/verify.py` — VERIFIED / TAMPERED / UNANCHORED verdicts; wallet scan first, receipt signature as a secondary route; rich report.
-- `cli_chain.py` — `facechain run` (search → evidence → memo), `facechain anchor --run DIR`, `facechain verify --run DIR|--bundle FILE [--tamper]`.
+- `cli.py` (`run`, beside `search`, sharing one option decorator since the Ponytail audit) and `cli_chain.py` (`anchor --run DIR`, `verify --run DIR|--bundle FILE [--tamper]`).
 
 ## Verified (real output, devnet)
 - Synthetic bundle `evidence/_synthetic` (real Kohli media bytes, fake post URL): `sha256sum bundle.json` = `f91da8318337be538a8f07ecfeb85f5063955d9de0fabe66aa9ba3c49b9cafb0` = `h=` in the memo.

@@ -42,11 +42,6 @@ def sidecar_path() -> Path:
 
 
 SAS_PROGRAM_ID = "22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG"
-CREDENTIAL_NAME = "FACECHAIN"
-SCHEMA_NAME = "FaceMatchV1"
-SCHEMA_VERSION = 1
-SCHEMA_FIELDS = ("bundle_hash", "cid", "post_url", "similarity_bps")
-ENV_KEYS = ("SAS_CREDENTIAL", "SAS_SCHEMA")
 
 
 class SasError(RuntimeError):
@@ -144,7 +139,7 @@ def write_env_keys(path: Path, values: dict[str, str]) -> list[str]:
     return written
 
 
-def setup_sas(settings: Settings, env_path: Path | None = None) -> dict[str, Any]:
+def setup_sas(settings: Settings) -> dict[str, Any]:
     """Create (or find) the credential and schema; record their addresses in `.env`."""
     result = call_sidecar(
         {
@@ -153,7 +148,7 @@ def setup_sas(settings: Settings, env_path: Path | None = None) -> dict[str, Any
             "rpc": settings.solana_rpc_url,
         }
     )
-    path = env_path or (Path.cwd() / ".env")
+    path = Path.cwd() / ".env"
     written = write_env_keys(
         path, {"SAS_CREDENTIAL": str(result["credential"]), "SAS_SCHEMA": str(result["schema"])}
     )
@@ -214,13 +209,11 @@ class SasCheck:
     hash_used: str
     recomputed: bool = False  # H recomputed from the media on disk (tampered evidence)
     attestation: str | None = None
-    nonce: str | None = None
     signer: str | None = None
     signer_ok: bool = False
     fields_ok: bool = False
     mismatches: tuple[str, ...] = ()
     expiry: int = 0
-    data: dict[str, Any] | None = None
     detail: str = ""
 
     @property
@@ -279,7 +272,6 @@ def check_attestation(
     except SasError as exc:
         return SasCheck(found=False, hash_used=h, recomputed=recomputed, detail=str(exc))
     attestation = found.get("attestation")
-    nonce = found.get("nonce")
     if not found.get("found"):
         detail = (
             "no attestation for the hash recomputed from the media on disk"
@@ -291,7 +283,6 @@ def check_attestation(
             hash_used=h,
             recomputed=recomputed,
             attestation=attestation,
-            nonce=nonce,
             detail=detail,
         )
     signer_ok, mismatches = compare_attestation(found, bundle, registry, expected_cid)
@@ -300,13 +291,11 @@ def check_attestation(
         hash_used=h,
         recomputed=recomputed,
         attestation=attestation,
-        nonce=nonce,
         signer=found.get("signer"),
         signer_ok=signer_ok,
         fields_ok=not mismatches,
         mismatches=mismatches,
         expiry=int(found.get("expiry") or 0),
-        data=found.get("data"),
         detail="attestation found"
         + ("" if signer_ok else f"; UNEXPECTED signer {found.get('signer')}"),
     )

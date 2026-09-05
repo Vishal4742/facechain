@@ -26,13 +26,15 @@ HH Goa 2026 shortlisting Task 3. Pipeline: face photo → genuine social search 
 - Secrets only in `.env` (gitignored). `.env.example` lists every key.
 - Commits: `<type>: <description>` with type in feat, fix, refactor, docs, test, chore.
 
-## Workflow (ECC loop + Claude Code team tips)
+## Workflow (ECC loop + Claude Code team tips + Ponytail)
+- Ponytail is active for all code: stop at the first rung that holds — does it need to exist, is it already in this repo, does the stdlib or an installed dependency do it, can it be one line, only then the minimum that works. Never cut trust-boundary validation, hashing/canonical rules, secret redaction, error handling that prevents misleading verdicts, or anything the README documents. Before committing run `/ponytail-review` on the diff; at phase close run `/ponytail-audit`; deliberate shortcuts carry a `ponytail:` comment naming the ceiling and upgrade path (`/ponytail-debt` lists them).
 - Research and reuse before writing new code (`search-first`). The research log is `docs/ARCHITECTURE.md` §12.
 - Tests first for pure modules: `evidence/bundle.py`, `search/filters.py`, `chain/memo.py` formatting and parsing, `search/rank.py` acceptance rule, `cache.py`. Model and network modules are covered by fixture-based tests plus `scripts/smoke.sh`. Project override of the ECC coverage rule: the 80 % target applies to those pure modules, not to `face/engine.py` or live clients.
 - Close every phase with: `/code-review` from a fresh context, `verification-loop` (ruff, pyright, pytest --cov, secret grep, diff review), the `verify-app` subagent, an update to `notes/phase-N.md` and this file, then `/commit-phase`.
 - Before committing a phase: "Grill me on these changes and don't commit until I pass your test." After: "Prove to me this works" with real command output.
 - When something goes sideways, re-plan instead of pushing on.
 - Phases 5 and 6 run in separate git worktrees under `.claude/worktrees/` after Phase 3 lands on `main`.
+- `facechain run` lives in `facechain/cli.py` next to `search` (shared option decorator); `anchor`, `attest`, `verify`, `setup-sas` live in `facechain/cli_chain.py`.
 
 ## Mistakes and rules
 Append one line after every correction ("Update your CLAUDE.md so you don't make that mistake again"). Prune at the end of each day.

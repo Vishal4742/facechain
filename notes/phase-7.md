@@ -30,3 +30,9 @@ Date: 2026-09-05 (deadline 2026-09-07 23:59)
 - `scripts\smoke.ps1 -Chain -Sas`: doctor OK (cache `C:\Users\...\.cache\facechain`), scan 6.0 s cold, live search ACCEPT 0.88 (Instagram winner; exact_matches returned 0 that time and was correctly not cached), run: pinned media + bundle, memo tx `4fRfp9US…`, VERIFIED, TAMPERED.
 - Defect found and fixed: the SAS sidecar path was package-relative, so a regular install looked in `site-packages\chain-ts`. `sidecar_path()` now tries `FACECHAIN_SIDECAR`, the package-relative path, then `chain-ts\sas.ts` in the current directory. Re-run: attestation `CcYmwbmP…` created in 3.8 s, VERIFIED with attestation rows.
 - `PYTHONUTF8=1` is required on Windows consoles (emoji in tweet text); `smoke.ps1` sets it.
+
+## Ponytail audit (2026-09-05 05:20 UTC)
+- Third technique adopted: the Ponytail plugin (DietrichGebert/ponytail, MIT) installed at project scope (`ponytail@ponytail`, marketplace declared in `.claude/settings.json`); its ladder is now in `CLAUDE.md`.
+- Whole-repo audit applied 22 simplifications: `search`/`run` share one option decorator and prelude, `Candidate.to_dict` via `dataclasses.fields`, `_interleave` via `itertools.zip_longest`, `mine_names` via `Counter`, `sas.ts` stdin via `node:stream/consumers`, dead helpers/flags/aliases removed (`test_auth`, `filter_social`, `_registry_pubkey`, `Band`, unused SAS constants, `query_face`), one-liners for dedupe/find_media/emit.
+- Net −128 lines (377 deleted, 249 added) across 13 files; ruff, pyright, 132 tests, offline run (ACCEPT, 0 searches) and `verify --run evidence/sample_run` (VERIFIED) unchanged. No `ponytail:` debt markers: every change is an exact equivalent.
+- Left alone on purpose: the cache secret-guard tuple, the cached_json/cached_bytes twins, the acceptance/verdict ladders, hashing and tamper code, fixture replay.

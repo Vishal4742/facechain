@@ -182,17 +182,12 @@ def resolve_by_name(name: str, cache: Cache) -> Identity | None:
     )
 
 
-def resolve(
-    hints: Sequence[Hint], cache: Cache, *, fallback_name: str | None = None
-) -> Identity | None:
-    """Knowledge Graph id first (unambiguous), then the hint text, then a caller-provided name."""
+def resolve(hints: Sequence[Hint], cache: Cache) -> Identity | None:
+    """Knowledge Graph id first (unambiguous), then the hint text."""
     for hint in hints:
-        if hint.kgmid:
-            ident = resolve_by_kgmid(hint.kgmid, cache)
-            if ident:
-                return ident
-    for name in [h.query for h in hints if h.query] + ([fallback_name] if fallback_name else []):
-        ident = resolve_by_name(name, cache)
-        if ident:
+        if hint.kgmid and (ident := resolve_by_kgmid(hint.kgmid, cache)):
+            return ident
+    for hint in hints:
+        if hint.query and (ident := resolve_by_name(hint.query, cache)):
             return ident
     return None

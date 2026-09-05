@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import zip_longest
 from pathlib import Path
 
 from . import http
@@ -13,7 +15,6 @@ from .cache import Cache, CacheMiss
 from .config import Settings
 from .face.engine import get_engine
 from .face.match import pick_query_face
-from .face.types import Face
 from .search.base import Candidate, Hint
 from .search.filters import dedupe
 from .search.identity import Identity, resolve
@@ -31,8 +32,8 @@ EventHandler = Callable[[str, str], None]
 @dataclass(frozen=True)
 class SearchOutcome:
     face_id: str
-    query_face: Face
     faces_in_query: int
+    engines: tuple[str, ...]
     candidates: list[Candidate]
     decision: Decision
     hints: list[Hint] = field(default_factory=list)
@@ -49,14 +50,7 @@ def _interleave(cands: list[Candidate]) -> list[Candidate]:
     by_engine: dict[str, list[Candidate]] = {}
     for cand in cands:
         by_engine.setdefault(cand.engine, []).append(cand)
-    out: list[Candidate] = []
-    queues = list(by_engine.values())
-    while queues:
-        for queue in list(queues):
-            out.append(queue.pop(0))
-            if not queue:
-                queues.remove(queue)
-    return out
+    return [c for group in zip_longest(*by_engine.values()) for c in group if c is not None]
 
 
 def prioritise(cands: list[Candidate]) -> list[Candidate]:
@@ -68,53 +62,21 @@ def prioritise(cands: list[Candidate]) -> list[Candidate]:
 
 
 NAME_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b")
-NAME_STOPWORDS = {
-    "The",
-    "This",
-    "That",
-    "Photo",
-    "Image",
-    "Images",
-    "News",
-    "Stock",
-    "Getty",
-    "Alamy",
-    "Instagram",
-    "Facebook",
-    "Twitter",
-    "Pinterest",
-    "Reddit",
-    "YouTube",
-    "TikTok",
-    "India",
-    "Cricket",
-    "Sports",
-    "Premium",
-    "Editorial",
-    "Free",
-    "Best",
-    "Top",
-    "New",
-    "Latest",
-    "Live",
-    "Video",
-    "Videos",
-    "Watch",
-    "Wallpaper",
-    "Wallpapers",
-    "HD",
-}
+NAME_STOPWORDS = set(
+    "The This That Photo Image Images News Stock Getty Alamy Instagram Facebook Twitter Pinterest "
+    "Reddit YouTube TikTok India Cricket Sports Premium Editorial Free Best Top New Latest Live "
+    "Video Videos Watch Wallpaper Wallpapers HD".split()
+)
 
 
 def mine_names(titles: list[str], *, min_count: int = 3) -> list[str]:
     """Most frequent capitalised 2-3 word sequences across candidate titles (likely the person)."""
-    counts: dict[str, int] = {}
-    for title in titles:
-        for match in NAME_RE.findall(title):
-            words = match.split()
-            if any(w in NAME_STOPWORDS for w in words):
-                continue
-            counts[match] = counts.get(match, 0) + 1
+    counts = Counter(
+        name
+        for title in titles
+        for name in NAME_RE.findall(title)
+        if not any(w in NAME_STOPWORDS for w in name.split())
+    )
     ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0])))
     return [name for name, n in ranked if n >= min_count]
 
@@ -153,10 +115,7 @@ def run_search(
     face_index: int | None = None,
     on_event: EventHandler | None = None,
 ) -> SearchOutcome:
-    def emit(level: str, message: str) -> None:
-        if on_event is not None:
-            on_event(level, message)
-
+    emit: EventHandler = on_event or (lambda level, message: None)
     engine = get_engine()
     faces = engine.embed_bytes(image_bytes)
     if not faces:
@@ -214,8 +173,8 @@ def run_search(
     )
     return SearchOutcome(
         face_id=face_id,
-        query_face=query,
         faces_in_query=len(faces),
+        engines=engines,
         candidates=verified,
         decision=decision,
         hints=hints,

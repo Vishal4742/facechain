@@ -12,16 +12,7 @@ from .. import http
 from ..cache import Cache, CacheMiss
 
 PINATA_UPLOAD = "https://uploads.pinata.cloud/v3/files"
-PINATA_AUTH_TEST = "https://api.pinata.cloud/data/testAuthentication"
 PUBLIC_GATEWAYS = ("https://ipfs.io/ipfs/{cid}", "https://dweb.link/ipfs/{cid}")
-
-
-def test_auth(jwt: str) -> bool:
-    try:
-        resp = http.get(PINATA_AUTH_TEST, headers={"Authorization": f"Bearer {jwt}"}, timeout=15)
-    except http.HttpError:
-        return False
-    return resp.status_code == 200
 
 
 def pin_bytes(
@@ -53,12 +44,8 @@ def pin_bytes(
     return str(cid) if cid else None
 
 
-def pin_file(
-    path: Path, *, jwt: str, name: str | None = None, content_type: str | None = None
-) -> str | None:
-    ctype = content_type or (
-        "application/json" if path.suffix == ".json" else "application/octet-stream"
-    )
+def pin_file(path: Path, *, jwt: str, name: str | None = None) -> str | None:
+    ctype = "application/json" if path.suffix == ".json" else "application/octet-stream"
     return pin_bytes(path.read_bytes(), jwt=jwt, name=name or path.name, content_type=ctype)
 
 

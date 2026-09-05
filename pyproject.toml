@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "facechain"
+version = "0.1.0"
+description = "Face scan -> genuine social search -> face-verified match -> Solana devnet record -> verify"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "insightface==1.0.1",
+  "onnxruntime",
+  "opencv-python<5",
+  "numpy",
+  "pillow",
+  "requests",
+  "python-dotenv",
+  "click",
+  "rich",
+  "solana==0.40.3",
+  "solders==0.29.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "pyright"]
+
+[project.scripts]
+facechain = "facechain.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["facechain*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["evidence", "samples", "chain-ts", ".claude"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "model: needs the InsightFace model pack on disk",
+  "network: needs live network access",
+]
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "/home/vishal/.venvs"
+venv = "facechain"
+typeCheckingMode = "basic"
+include = ["facechain", "tests", "scripts"]

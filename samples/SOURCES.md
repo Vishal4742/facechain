@@ -1,0 +1,26 @@
+# Sample image sources
+
+All images come from Wikimedia Commons under the licence listed. They are used only to
+develop and demonstrate the pipeline. Regenerate this file with `python3 scripts/fetch_samples.py`.
+
+| subject | local file | licence | author | date | source |
+|---|---|---|---|---|---|
+| kohli | `samples/kohli/subject.jpg` | CC BY-SA 4.0 | Anand Anil | 2017-11-06 | [Virat Kohli portrait.jpg](https://commons.wikimedia.org/wiki/File:Virat_Kohli_portrait.jpg) |
+| kohli | `samples/kohli/alt-1-virat-kohli-in-pmo-new-delhi.jpg` | GODL-India | Prime Minister's Office | 2024-07-04 | [Virat Kohli in PMO New Delhi.jpg](https://commons.wikimedia.org/wiki/File:Virat_Kohli_in_PMO_New_Delhi.jpg) |
+| kohli | `samples/kohli/alt-2-virat-kohli-during-the-india-vs-aus-4th-test-match-at-narend.jpg` | GODL-India | Prime Minister's Office | 2023-03-09 | [Virat Kohli during the India vs Aus 4th Test match at Narendra Modi Stadium on 09 March 2023.jpg](https://commons.wikimedia.org/wiki/File:Virat_Kohli_during_the_India_vs_Aus_4th_Test_match_at_Narendra_Modi_Stadium_on_09_March_2023.jpg) |
+| kohli | `samples/kohli/alt-3-virat-kohli-in-new-delhi-in-december-2018.jpg` | GODL-India | Prime Minister's Office, Government of India | 2017-12-20 | [Virat Kohli in New Delhi in December 2018.jpg](https://commons.wikimedia.org/wiki/File:Virat_Kohli_in_New_Delhi_in_December_2018.jpg) |
+| kohli | `samples/kohli/alt-4-virat-kohli-jan-2015-cropped.jpg` | CC BY-SA 2.0 | NAPARAZZI | 2015-01-04 | [VIRAT KOHLI JAN 2015 (cropped).jpg](https://commons.wikimedia.org/wiki/File:VIRAT_KOHLI_JAN_2015_(cropped).jpg) |
+| ronaldo | `samples/ronaldo/subject.jpg` | CC BY 4.0 | Bryan Berlin | 2026-07-02 | [Cristiano Ronaldo Croatia v Portugal 2 July 2026-154(cropped).jpg](https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-154(cropped).jpg) |
+| ronaldo | `samples/ronaldo/alt-1-cristiano-ronaldo-2018-cropped.jpg` | CC BY-SA 3.0 | Анна Нэсси | 2018-06-15 | [Cristiano Ronaldo 2018 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo_2018_(cropped).jpg) |
+| ronaldo | `samples/ronaldo/alt-2-cristiano-ronaldo-croatia-vs-portugal-10th-june-2013-cropped.jpg` | CC BY-SA 3.0 | Fanny Schertzer | 2013-06-10 | [Cristiano Ronaldo - Croatia vs. Portugal, 10th June 2013 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo_-_Croatia_vs._Portugal,_10th_June_2013_(cropped).jpg) |
+| ronaldo | `samples/ronaldo/alt-3-cristiano-ronaldo-2010.jpg` | Attribution | Dagmara Gurdziel / RC Lens | 2010 | [Cristiano Ronaldo, 2010.jpg](https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo,_2010.jpg) |
+| hamilton | `samples/hamilton/subject.jpg` | CC BY 2.0 | Jen Ross | 2022-06-30 | [Lewis Hamilton, British GP 2022 (52382788875) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Lewis_Hamilton,_British_GP_2022_(52382788875)_(cropped).jpg) |
+| hamilton | `samples/hamilton/alt-1-lewis-hamilton-2022-s-o-paulo-grand-prix-52498120773-cropped.jpg` | CC BY 2.0 | Governo do Estado de São Paulo | 2022-11-13 | [Lewis Hamilton 2022 São Paulo Grand Prix (52498120773) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Lewis_Hamilton_2022_S%C3%A3o_Paulo_Grand_Prix_(52498120773)_(cropped).jpg) |
+| hamilton | `samples/hamilton/alt-2-lewis-hamilton-2019-canadian-grand-prix-cropped.jpg` | CC BY 2.0 | Steve_Melnyk | 2019-06-09 | [Lewis Hamilton, 2019 Canadian Grand Prix (cropped).jpg](https://commons.wikimedia.org/wiki/File:Lewis_Hamilton,_2019_Canadian_Grand_Prix_(cropped).jpg) |
+| hamilton | `samples/hamilton/alt-3-lewis-hamilton-2021.jpg` | CC BY 3.0 | Show do Esporte | 2021-12-07 | [Lewis Hamilton 2021.jpg](https://commons.wikimedia.org/wiki/File:Lewis_Hamilton_2021.jpg) |
+| neg | `samples/neg/rohit-gurunath-sharma.jpg` | GODL-India | Prime Minister's Office | 2023-03-09 | [Rohit Gurunath Sharma.jpg](https://commons.wikimedia.org/wiki/File:Rohit_Gurunath_Sharma.jpg) |
+| neg | `samples/neg/hardik-pandya-2020.jpg` | CC BY 3.0 | Bollywood Hungama | 2020-01-21 | [Hardik Pandya 2020.jpg](https://commons.wikimedia.org/wiki/File:Hardik_Pandya_2020.jpg) |
+| neg | `samples/neg/lionel-messi-argentina-2022-fifa-world-cup-cropped-upscale.jpg` | CC BY 4.0 | Hossein Zohrevand | 2022-11-26 | [Lionel-Messi-Argentina-2022-FIFA-World-Cup (cropped-upscale).jpg](https://commons.wikimedia.org/wiki/File:Lionel-Messi-Argentina-2022-FIFA-World-Cup_(cropped-upscale).jpg) |
+| neg | `samples/neg/2019-final-da-copa-am-rica-2019-48225217491-cropped.jpg` | CC BY 2.0 | Palácio do Planalto | 2019-07-07 | [2019 Final da Copa América 2019 - 48225217491 (cropped).jpg](https://commons.wikimedia.org/wiki/File:2019_Final_da_Copa_Am%C3%A9rica_2019_-_48225217491_(cropped).jpg) |
+| neg | `samples/neg/george-russell-silverstone-2021-51349521638-cropped.jpg` | CC BY 2.0 | Jen Ross | 2021-07-15 | [George Russell, Silverstone 2021 (51349521638) (cropped).jpg](https://commons.wikimedia.org/wiki/File:George_Russell,_Silverstone_2021_(51349521638)_(cropped).jpg) |
+| neg | `samples/neg/shikhar-dhawan-16005494418.jpg` | CC BY-SA 2.0 | NAPARAZZI | 2015-01-04 | [SHIKHAR DHAWAN (16005494418).jpg](https://commons.wikimedia.org/wiki/File:SHIKHAR_DHAWAN_(16005494418).jpg) |

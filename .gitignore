@@ -1,0 +1,37 @@
+# secrets and keys
+.env
+*keypair*.json
+id.json
+
+# run outputs (one sample run is committed on purpose)
+evidence/*
+!evidence/sample_run/
+evidence/*_tampered/
+
+# caches, models, archives
+cache/
+.cache/
+*.onnx
+*.zip
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+htmlcov/
+.coverage
+
+# node
+chain-ts/node_modules/
+chain-ts/dist/
+
+# misc
+*.log
+*:Zone.Identifier
+Thumbs.db
+desktop.ini
+.claude/worktrees/

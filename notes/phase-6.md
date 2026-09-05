@@ -25,6 +25,7 @@ Date: 2026-09-05
 - Verdict rule: an attestation that exists but disagrees with the bundle or the registry → TAMPERED; an absent attestation never changes the memo verdict (runs anchored before Phase 6 stay VERIFIED and simply show `attestation ABSENT`).
 - Memo and attestation stay two transactions: the memo is pure Python (unchanged), the attestation goes through the sidecar; `@solana-program/memo` is never imported.
 - Confirmation by polling `getSignatureStatuses` rather than `sendAndConfirmTransactionFactory`, which needs a websocket subscription to the public devnet endpoint.
+- After merging main (Phases 4–5): the attested `cid` is the memo's bundle CID (Pinata pin of `bundle.json`, `""` when unpinned); `attest --run` reads it from the receipt. `verify` compares `cid` only when the memo names one (the bundle cannot contain its own CID); `bundle_hash`, `post_url` and `similarity_bps` are always compared. `--no-pin` and `--sas` coexist on `anchor`/`run`; `scripts/smoke.sh` passes `--sas` when `SAS_CREDENTIAL` is set. 130 tests pass after the merge.
 
 ## Open
 - `evidence/_synthetic*` are scratch runs (gitignored); the committed sample run and the README demo come from Phase 7 (`run --sas`).

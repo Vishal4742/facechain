@@ -54,14 +54,14 @@ class Identity:
 
 
 def _sparql(query: str, cache: Cache) -> dict[str, Any]:
-    def fetch() -> dict[str, Any]:
+    def fetch() -> dict[str, Any] | None:
         resp = http.get(
             SPARQL_URL,
             params={"query": query, "format": "json"},
             headers={"Accept": "application/sparql-results+json"},
             timeout=40,
         )
-        return resp.json() if resp.status_code == 200 else {}
+        return resp.json() if resp.status_code == 200 else None
 
     return cache.cached_json("wikidata.sparql", {"query": query}, fetch) or {}
 
@@ -132,7 +132,7 @@ def name_matches(query: str, label: str) -> bool:
 
 
 def search_entities(query: str, cache: Cache, *, limit: int = 5) -> list[tuple[str, str]]:
-    def fetch() -> dict[str, Any]:
+    def fetch() -> dict[str, Any] | None:
         resp = http.get(
             WIKIDATA_API,
             params={
@@ -144,7 +144,7 @@ def search_entities(query: str, cache: Cache, *, limit: int = 5) -> list[tuple[s
             },
             timeout=20,
         )
-        return resp.json() if resp.status_code == 200 else {}
+        return resp.json() if resp.status_code == 200 else None
 
     data = cache.cached_json("wikidata.search", {"search": query, "limit": limit}, fetch) or {}
     return [

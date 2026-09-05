@@ -87,12 +87,10 @@ def load_keypair(path: Path) -> Any:
 
 
 def _memo_instruction(signer_pubkey: Any, text: str) -> Any:
-    from solders.pubkey import Pubkey
     from spl.memo.constants import MEMO_PROGRAM_ID as SPL_MEMO_ID
     from spl.memo.instructions import create_memo
     from spl.memo.models import MemoParams
 
-    assert str(SPL_MEMO_ID) == MEMO_PROGRAM_ID or Pubkey.from_string(MEMO_PROGRAM_ID)
     return create_memo(
         MemoParams(program_id=SPL_MEMO_ID, signer=signer_pubkey, message=text.encode("utf-8"))
     )

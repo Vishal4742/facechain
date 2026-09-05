@@ -147,7 +147,9 @@ def render_report(report: Report) -> Table:
 
 def _add_sas_rows(table: Table, sas: SasCheck | None) -> None:
     if sas is None:
-        table.add_row("attestation", "[dim]SAS not configured (facechain setup-sas)[/dim]")
+        table.add_row(
+            "attestation", "[dim]not checked: no credential/schema in receipt or .env[/dim]"
+        )
         return
     origin = "recomputed from the media on disk" if sas.recomputed else "stored bundle.json"
     table.add_row("attestation nonce", f"H = {sas.hash_used}\n({origin})")

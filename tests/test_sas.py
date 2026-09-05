@@ -382,7 +382,7 @@ def test_render_report_shows_attestation_rows(tmp_path: Path) -> None:
         return console.export_text()
 
     text = render(None)
-    assert "SAS not configured" in text
+    assert "not checked: no credential/schema" in text
     text = render(
         SasCheck(
             found=True,

@@ -44,11 +44,11 @@ mkdir -p ~/.insightface/models/buffalo_l
 curl -L -o /tmp/buffalo_l.zip https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip
 unzip -o /tmp/buffalo_l.zip -d ~/.insightface/models/buffalo_l
 
-cp .env.example .env        # then fill in SERPAPI_KEY (required), PINATA_JWT (optional)
+cp .env.example .env        # then fill in SERPAPI_KEY (required), PINATA_JWT (optional); the demo SAS ids are pre-filled
 facechain doctor --online   # model, keys, wallet, devnet balance
 
 (cd chain-ts && npm ci)     # optional: SAS sidecar deps (sas-lib 1.0.10 + @solana/kit 5.5.1)
-facechain setup-sas         # optional, once: SAS credential + schema; addresses written to .env
+facechain setup-sas         # only if you want to attest with YOUR wallet: creates your own credential + schema
 ```
 
 Keys and accounts:
@@ -58,7 +58,7 @@ Keys and accounts:
 | `SERPAPI_KEY` | Google Lens search (Path A) | free plan at serpapi.com, 250 searches/month |
 | `PINATA_JWT` | pinning the evidence to IPFS (optional; the sample run is pinned) | free plan at pinata.cloud |
 | Solana keypair | signing the devnet memo and attestation | `solana-keygen new`, fund at faucet.solana.com; path in `SOLANA_KEYPAIR_PATH` |
-| `SAS_CREDENTIAL`, `SAS_SCHEMA` | the attestation record (optional) | written by `facechain setup-sas` |
+| `SAS_CREDENTIAL`, `SAS_SCHEMA` | checking/creating attestations | pre-filled with the demo PDAs; `facechain setup-sas` creates your own |
 
 ## Commands
 
@@ -96,7 +96,7 @@ Tamper demo: `verify --tamper` copies the run, flips the middle byte of `post_me
 - **Record 1:** SPL Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`, one transaction per accepted match, fee 5000 lamports.
 - **Record 2 (`--sas`):** [Solana Attestation Service](https://github.com/solana-foundation/solana-attestation-service) program `22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG`; credential `Awhv5DjjmeeGZPxeMim1hW8yWKgMJtUFD2dX7BrArpzh` (`FACECHAIN`), schema `DNnsTXgmuPDsb3gKF8rgYsnRYP7h6qLEMC9udtxofpDD` (`FaceMatchV1`: `bundle_hash`, `cid`, `post_url`, `similarity_bps`), one attestation per bundle with nonce = H, no expiry. Built with `sas-lib` + `@solana/kit` in `chain-ts/sas.ts`, driven from Python over JSON.
 - **Registry wallet:** `9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX` (demo key; a record is only trusted when this key signed it).
-- **Committed sample run** (`evidence/sample_run/`, Cristiano Ronaldo, Instagram winner at similarity 0.88): memo tx [2UZiq877…](https://explorer.solana.com/tx/2UZiq877N8gcJQWndUZinzmP6f19R8U1NXg18fDu6Zfg7WDm5D5bvzq2g7PuTk4tXwGGSYjrb1nDDwee1pqBdihw?cluster=devnet), attestation PDA `v9Ui5T4wKzxMitn5vfs3Bnv1ZBeM7orkJWbTM8AF72N`, bundle on IPFS `bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`, post media `bafkreie5gwsu3egkxodd5xwxmq5xdpqjuvxk3b4qvujwakyufuzhkj7duu`. Re-verify it yourself with only the public devnet RPC: `facechain verify --run evidence/sample_run`, or from IPFS alone: `facechain verify --cid bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`.
+- **Committed sample run** (`evidence/sample_run/`, Cristiano Ronaldo, Instagram winner at similarity 0.88): memo tx [2UZiq877…](https://explorer.solana.com/tx/2UZiq877N8gcJQWndUZinzmP6f19R8U1NXg18fDu6Zfg7WDm5D5bvzq2g7PuTk4tXwGGSYjrb1nDDwee1pqBdihw?cluster=devnet), attestation PDA `v9Ui5T4wKzxMitn5vfs3Bnv1ZBeM7orkJWbTM8AF72N`, bundle on IPFS `bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`, post media `bafkreie5gwsu3egkxodd5xwxmq5xdpqjuvxk3b4qvujwakyufuzhkj7duu`. Re-verify it yourself with only the public devnet RPC and no keys: `facechain verify --run evidence/sample_run` (the attestation rows additionally need Node ≥ 22.6 and `npm ci` in `chain-ts/`), or from IPFS alone: `facechain verify --cid bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`.
 
 ## Evidence bundle
 
@@ -130,7 +130,7 @@ python scripts/calibrate.py --pos samples/kohli --neg samples/neg --markdown
 ## Known limitations
 
 - Google Lens does not identify faces; it proposes visually similar images. The face verification on our side establishes identity, so the pipeline works best for people whose photos circulate publicly. A private individual with no indexed photos yields REVIEW, not a match.
-- Instagram, Facebook, TikTok and Reddit no longer allow anonymous content fetches. For those platforms the anchored media is the image the search engine served for the post; for X and YouTube the original media and text are fetched.
+- Instagram, Facebook, TikTok and Reddit no longer allow anonymous content fetches (supported platforms: Instagram, X, Facebook, TikTok, Threads, YouTube, LinkedIn, Pinterest, Reddit). For those platforms the anchored media is the image the search engine served for the post; for X and YouTube the original media and text are fetched.
 - Thresholds were calibrated on three public figures and six impostors (below). Impostor similarity never exceeded 0.19; same-person pairs ranged 0.44–0.84 at full size and dipped to 0.26 for one subject at 150 px thumbnails. Matches need ≥ 0.45 plus corroboration; 0.35–0.45 is shown as REVIEW and never anchored.
 
 | pairs (Kohli) | n | min | median | max |
@@ -143,7 +143,8 @@ python scripts/calibrate.py --pos samples/kohli --neg samples/neg --markdown
 - SerpApi's free plan allows 250 searches a month; responses are cached so a fresh run costs two searches.
 - Input is an image file. Webcam capture is not wired in (WSL2 has no camera access by default).
 - Devnet only; the registry key is a demo key and the memo is a hash commitment, not a legal attestation.
-- Candidate photos were tested during development to choose the demo subject; the winner in every run is chosen by the rule above, never by hand.
+- Candidate photos were tested during development to choose the demo subject; the winner in every run is chosen by the rule above, never by hand. The committed sample run replays the recorded live search of 2026-09-05 03:21 UTC (`search.json` shows the SerpApi ids and `live: false`); the screen recording uses `--live`.
+- `verify` trusts the registry named in `receipt.json` only when it is the demo registry; pass `--registry` to verify records signed by another wallet.
 
 ## Responsible use
 

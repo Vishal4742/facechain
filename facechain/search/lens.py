@@ -39,6 +39,7 @@ class SearchMeta:
     live: bool
     search_id: str | None
     created_at: str | None
+    replayed: bool = False
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,7 @@ def search_lens(
     for type_ in types:
         params = {"image_sha256": image_sha, "prep": PREP, "type": type_}
         live = False
+        replayed = False
 
         def fetch(type_: str = type_) -> dict[str, Any]:
             nonlocal jpeg, image_id, live
@@ -186,9 +188,10 @@ def search_lens(
                 jpeg = prepare_upload(image_bytes)
             if image_id is None:
                 image_id = upload_image(jpeg, settings.serpapi_key)
+            data = lens_search_raw(image_id, type_, settings.serpapi_key)
             live = True
             STATS.serpapi_searches += 1
-            return lens_search_raw(image_id, type_, settings.serpapi_key)
+            return data
 
         try:
             data = cache.get_json("serpapi.lens", params)
@@ -207,6 +210,7 @@ def search_lens(
             if replay is None:
                 raise
             data = replay
+            replayed = True
             emit(
                 f"LIVE CALL FAILED ({exc}); replaying recorded response "
                 f"id={data.get('search_metadata', {}).get('id')} "
@@ -214,13 +218,14 @@ def search_lens(
                 "error",
             )
         sm = data.get("search_metadata") or {}
-        meta.append(SearchMeta(type_, live, sm.get("id"), sm.get("created_at")))
+        meta.append(SearchMeta(type_, live, sm.get("id"), sm.get("created_at"), replayed))
         cands, new_hints = parse_lens_response(data, engine=ENGINE_BY_TYPE[type_])
         all_cands.extend(cands)
         hints.extend(h for h in new_hints if h not in hints)
         emit(
             f"lens {type_}: {len(cands)} matches "
-            f"({'live' if live else 'cached'} id={sm.get('id')} at {sm.get('created_at')})"
+            f"({'REPLAYED' if replayed else 'live' if live else 'cached'} "
+            f"id={sm.get('id')} at {sm.get('created_at')})"
         )
 
     return LensResult(candidates=dedupe(all_cands), hints=hints, meta=meta)

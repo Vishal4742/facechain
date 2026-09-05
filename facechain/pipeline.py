@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import http
 from .cache import Cache, CacheMiss
 from .config import Settings
 from .face.engine import get_engine
@@ -125,6 +126,9 @@ def _identity_candidates(
         identity = resolve(hints, cache)
     except CacheMiss:
         emit("warn", "identity: not cached, skipped (offline)")
+        return None, []
+    except (http.HttpError, ValueError) as exc:
+        emit("warn", f"identity: Wikidata unavailable ({http.redact(str(exc))[:80]}); continuing")
         return None, []
     if identity is None:
         emit("warn", "identity: no Wikidata match for the Lens hints")

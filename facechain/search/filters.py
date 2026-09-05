@@ -20,6 +20,7 @@ PLATFORM_DOMAINS: dict[str, tuple[str, ...]] = {
     "youtube": ("youtube.com", "youtu.be"),
     "linkedin": ("linkedin.com",),
     "pinterest": ("pinterest.com", "pin.it"),
+    "reddit": ("reddit.com", "redd.it"),
 }
 
 # regexes tested against path + ("?" + query) of the canonical URL
@@ -34,6 +35,7 @@ POST_PATTERNS: dict[str, re.Pattern[str]] = {
     "youtube": re.compile(r"^/watch\?v=|^/shorts/|^/live/"),
     "linkedin": re.compile(r"^/posts/|^/feed/update/"),
     "pinterest": re.compile(r"^/pin/"),
+    "reddit": re.compile(r"/comments/[^/]+"),
 }
 
 # query parameters that identify content and therefore survive canonicalisation

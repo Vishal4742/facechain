@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
@@ -29,6 +31,17 @@ from .http import HttpError, redact
 from .search.lens import LensError
 
 console = Console()
+DEFAULT_REGISTRY = "9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX"  # the demo registry wallet
+
+
+def _settings_with_receipt_sas(settings: Settings, receipt: dict[str, Any] | None) -> Settings:
+    """Verification uses the credential/schema recorded in the receipt, else .env, else nothing."""
+    sas = (receipt or {}).get("sas") or {}
+    credential = sas.get("credential") or settings.sas_credential
+    schema = sas.get("schema") or settings.sas_schema
+    if credential == settings.sas_credential and schema == settings.sas_schema:
+        return settings
+    return replace(settings, sas_credential=credential, sas_schema=schema)
 
 
 def _event_printer(level: str, message: str) -> None:
@@ -195,7 +208,12 @@ def run(
     bundle = None
     if winner is not None:
         media_cid: str | None = None
-        if settings.pinata_jwt and not no_pin and winner.media_bytes:
+        if (
+            settings.pinata_jwt
+            and not no_pin
+            and winner.media_bytes
+            and not (offline or settings.offline)
+        ):
             media_cid = ipfs.pin_bytes(
                 winner.media_bytes,
                 jwt=settings.pinata_jwt,
@@ -284,7 +302,9 @@ def anchor(run_dir: Path, no_pin: bool, sas: bool) -> None:
     "--tamper", is_flag=True, help="Flip one byte of the stored media first and re-verify."
 )
 @click.option(
-    "--registry", default=None, help="Registry wallet pubkey (default: receipt or keypair)."
+    "--registry",
+    default=None,
+    help="Registry wallet pubkey (default: the receipt's, else the demo registry).",
 )
 @click.option("--cid", default=None, help="Fetch bundle.json (and its media) from IPFS by CID.")
 def verify(
@@ -305,7 +325,14 @@ def verify(
         target = tamper_copy(target)
         console.print(f"[yellow]tampered copy: {target}[/yellow]")
     receipt = read_receipt(run_dir or target)
-    registry_key = str(registry or (receipt or {}).get("registry") or _registry_pubkey(settings))
+    receipt_registry = (receipt or {}).get("registry")
+    registry_key = str(registry or receipt_registry or DEFAULT_REGISTRY)
+    if registry is None and receipt_registry and receipt_registry != DEFAULT_REGISTRY:
+        console.print(
+            f"[yellow]receipt names registry {receipt_registry}, not the demo registry "
+            f"{DEFAULT_REGISTRY}; pass --registry to choose explicitly[/yellow]"
+        )
+    settings = _settings_with_receipt_sas(settings, receipt)
     report = verify_run(
         target, registry=registry_key, rpc_url=settings.solana_rpc_url, settings=settings
     )

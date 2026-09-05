@@ -151,6 +151,9 @@ def _add_sas_rows(table: Table, sas: SasCheck | None) -> None:
             "attestation", "[dim]not checked: no credential/schema in receipt or .env[/dim]"
         )
         return
+    if not sas.checked:
+        table.add_row("attestation", f"[dim]not checked: {sas.detail}[/dim]")
+        return
     origin = "recomputed from the media on disk" if sas.recomputed else "stored bundle.json"
     table.add_row("attestation nonce", f"H = {sas.hash_used}\n({origin})")
     table.add_row("attestation PDA", sas.attestation or f"[yellow]{sas.detail}[/yellow]")

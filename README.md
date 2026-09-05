@@ -36,16 +36,17 @@ No API keys, no wallet, no model download. Only Python 3.12+ and the public devn
 git clone https://github.com/Vishal4742/facechain && cd facechain
 python3 -m venv .venv && . .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e .
+(cd chain-ts && npm ci)      # optional, needs Node ≥ 22.6: enables the attestation rows; without it they read "not checked"
 facechain verify --run evidence/sample_run
 ```
 
-Expected: a table headed **VERIFIED** showing the bundle hash `a8f1e58b…6758c3`, the memo transaction `2UZiq877…`, `signer ok: yes`, and the on-chain memo text containing `h=a8f1e58b…`. Then break it on purpose:
+Expected: a table headed **VERIFIED** showing the bundle hash `a8f1e58b…6758c3`, the memo transaction `2UZiq877…`, `signer ok: yes` (the signer is compared with the demo registry wallet `9ziKFvAU…a1MX`), the on-chain memo text containing `h=a8f1e58b…`, and, with Node installed, `attestation: found`. Then break it on purpose:
 
 ```bash
 facechain verify --run evidence/sample_run --tamper
 ```
 
-Expected: **TAMPERED**. One byte of the stored post image was flipped; its hash no longer matches the hash committed on chain. Exit code 1.
+Expected: **TAMPERED**. One byte of the stored post image was flipped (in a copy, `evidence/sample_run_tampered/`, ignored by git); its hash no longer matches the hash committed on chain, and the attestation for the altered evidence is ABSENT. Exit code 1.
 
 Prefer not to trust our code at all? [docs/VERIFY.md](docs/VERIFY.md) does the same check with `sha256sum`, `curl` against the Solana JSON-RPC and an IPFS gateway.
 
@@ -75,14 +76,14 @@ Five stages, each visible in the terminal:
 1. **Scan.** Detect faces in the input photo, pick the query face (largest, or `--face-index`), compute a 512-dimensional ArcFace embedding. Quality gates on detection score, eye distance and blur.
 2. **Search.** Path A uploads the photo to Google Lens through SerpApi and collects visual and exact matches, each with a link and a thumbnail. Path B takes the identity hint Lens returns, resolves the person on Wikidata (humans only, label must match), reads their verified handles, and pulls their own recent X posts that carry media. Both paths run live; every SerpApi search id and timestamp is printed.
 3. **Verify by face.** For every candidate, download the media, detect faces, and compute the cosine similarity to the query embedding. The ranked table shows engine, platform, URL, faces found, similarity, band and corroboration.
-4. **Decide.** The winner is the best-scoring social **post** (never a profile page) at or above the match threshold, and it is only accepted with corroboration: a second candidate at 0.40 or above, or the post being authored by the identity Wikidata resolved. Otherwise the result is REVIEW and nothing is anchored.
+4. **Decide.** The winner is the best-scoring social **post** (never a profile page) at or above the match threshold 0.45. It is accepted only with *corroboration*, meaning a second, independent piece of evidence for the same identity: another candidate at 0.40 or above, or the post being authored by the person Wikidata resolved. The rule that fired is printed as the ACCEPT line and stored in `search.json` (`decision.reason`); author or engine signals on individual candidates are stored in their `corroborated_by` field. Otherwise the result is REVIEW and nothing is anchored.
 5. **Record and verify.** The finding is written to an evidence bundle, pinned to IPFS, and committed to Solana devnet twice: a memo carrying the hashes, and an attestation whose address is derived from the bundle hash. `verify` recomputes everything from the stored files and checks it against the chain.
 
 ## Why the search is genuine
 
-- Nothing is looked up in a table. Two Lens calls happen per run, and their SerpApi ids and timestamps are printed and stored in `search.json`.
+- Nothing is looked up in a table. Two Lens calls happen per run, live by default (`--live` also bypasses the development cache), and their SerpApi ids and timestamps are printed and stored in `search.json`. The committed sample run replays the responses recorded at 03:21 UTC on 2026-09-05 and was anchored live at 03:40 UTC; the video is a fully live run.
 - The whole ranked candidate list is printed, including the rejected ones, so the decision is visible.
-- Lens proposes; faces decide. A private person's photo returns no Lens results at all, and the pipeline answers REVIEW instead of inventing a match (we tested this on a non-public face: zero candidates, nothing anchored).
+- Lens proposes; faces decide. A private person's photo returns no Lens results at all, and the pipeline answers REVIEW instead of inventing a match. Artifact: [docs/private-face-test.json](docs/private-face-test.json) is the `search.json` of such a run on the author's own face, with the SerpApi ids, zero candidates and the REVIEW decision.
 - Different input, different answer: the same code found an Instagram post for Ronaldo, a YouTube post for Kohli and a Pinterest pin for Hamilton, chosen by the rule, not by hand.
 - Cached responses are used only to save quota during development. On camera, `--live` forces fresh calls; if a live call ever fails, a recorded response is replayed **with a red banner** naming the failure, and the chain step is always live.
 
@@ -171,6 +172,8 @@ Committed sample run, `evidence/sample_run/` (Cristiano Ronaldo, Instagram post,
 | Post media on IPFS | `bafkreie5gwsu3egkxodd5xwxmq5xdpqjuvxk3b4qvujwakyufuzhkj7duu` |
 | Lens search ids | `6a9b8ad26539a2e75723d28b`, `6a9b8ad7f30d1363c7ab2709` (2026-09-05 03:21 UTC) |
 
+Provenance of this sample: the Lens responses were recorded live at 03:21:54 and 03:21:59 UTC (ids above); the committed run replayed them from cache (`search.json`: `live: false`) and was pinned and anchored live at 03:40:12 UTC (memo block time). The demo video shows the same pipeline with every call live.
+
 Why two records: the memo is the simplest possible commitment and is readable in any explorer; the attestation is the Solana Foundation's standard for exactly this kind of claim and makes the record addressable from the bundle hash alone. Either one satisfies the task on its own.
 
 ## Evidence format
@@ -205,7 +208,7 @@ chain-ts/sas.ts            attestation sidecar (Node, sas-lib + @solana/kit)
 evidence/sample_run/       the committed, verifiable run
 samples/                   CC-licensed photos of the demo subjects + impostors (samples/SOURCES.md)
 scripts/                   smoke.sh / smoke.ps1, demo.sh + demo.tape (video), calibrate.py, fetch_samples.py
-tests/                     132 tests; fixtures under tests/fixtures/cache make the pipeline runnable offline
+tests/                     133 tests (one live test skipped by default); fixtures under tests/fixtures/cache make the pipeline runnable offline
 docs/, notes/              architecture and research log; per-phase build notes with real outputs
 ```
 
@@ -215,7 +218,7 @@ Development: `pytest -q`, `ruff check . && ruff format --check .`, `pyright`, `n
 
 - **Public figures only, in practice.** Google Lens does not identify faces; it proposes visually similar images, and it returns nothing for close-up faces of people it does not treat as public. Our face verification establishes identity among what Lens proposes. A private person yields REVIEW.
 - **Platform access.** Instagram, Facebook, TikTok and Reddit refuse anonymous content fetches. For those platforms the anchored media is the image the search engine served for the post; for X and YouTube the original media and text are fetched. Supported platforms: Instagram, X, Facebook, TikTok, Threads, YouTube, LinkedIn, Pinterest, Reddit.
-- **Thresholds** were calibrated on three public figures and six impostors: impostor similarity never exceeded 0.19; same-person pairs ranged 0.44–0.84 at full size and dipped to 0.26 for one subject at 150 px thumbnails. Match needs ≥ 0.45 plus corroboration; 0.35–0.45 is REVIEW and is never anchored. Calibration table for the Kohli set:
+- **Thresholds** were calibrated on three public figures and six impostors: impostor similarity never exceeded 0.19; same-person pairs ranged 0.44–0.84 at full size (per-subject minima 0.530 Kohli, 0.467 Ronaldo, 0.439 Hamilton) and dipped to 0.26 for Hamilton at 150 px thumbnails. So the 0.45 match threshold sits far above impostors but can miss a genuine low-quality pair, which lands in REVIEW rather than being anchored. Full tables per subject are in `notes/phase-1.md`; the cleanest set is shown here:
 
 | pairs | n | min | median | max |
 |---|---|---|---|---|
@@ -224,6 +227,7 @@ Development: `pytest -q`, `ruff check . && ruff format --check .`, `pyright`, `n
 | impostor, full size | 30 | −0.058 | 0.037 | 0.155 |
 | impostor, 150 px thumbnail | 30 | −0.063 | 0.040 | 0.152 |
 
+- **Corroboration is weak for very famous faces.** The "second candidate ≥ 0.40" rule is easily satisfied by Lens alone when thousands of photos of the person circulate, so for such subjects it adds little; the author-identity signal is the stronger one and fires only when the person's own posts are among the candidates (in the Ronaldo runs, 20 of his own X posts carried it, but the winning Instagram post has no author in its URL).
 - **Illustrated faces.** The detector also finds drawn faces, and identical artwork matches itself strongly; the pipeline reports what it finds and does not judge whether a face is a photograph.
 - **Quota.** SerpApi's free plan allows 250 searches a month; a fresh run costs two, re-runs of the same photo cost none. Google's result counts vary between calls (exact matches for the same photo returned 378 once and 0 an hour later); empty results are never cached.
 - **Devnet only.** The registry key is a demo key; the memo is a hash commitment, not a legal attestation. Input is an image file; no webcam capture.

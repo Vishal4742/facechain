@@ -1,0 +1,26 @@
+{
+  "what": "Search run on a private individual's photo (the author, with consent), 2026-09-05. Google Lens returned no results for either search type, so no candidates existed and nothing was anchored.",
+  "search_metadata": [
+    {
+      "type": "visual_matches",
+      "live": true,
+      "search_id": "6a9b993773d224d4c409343c",
+      "created_at": "2026-09-05 04:23:19 UTC",
+      "replayed": false
+    },
+    {
+      "type": "exact_matches",
+      "live": true,
+      "search_id": "6a9b993c408027064053f6d3",
+      "created_at": "2026-09-05 04:23:24 UTC",
+      "replayed": false
+    }
+  ],
+  "hints": [],
+  "candidates": [],
+  "decision": {
+    "accepted": false,
+    "reason": "REVIEW: no candidate with a detectable face",
+    "winner": null
+  }
+}

@@ -207,6 +207,7 @@ def fetch_attestation(bundle_hash: str, settings: Settings) -> dict[str, Any]:
 class SasCheck:
     found: bool
     hash_used: str
+    checked: bool = True  # False when the sidecar could not run (no node / no npm ci)
     recomputed: bool = False  # H recomputed from the media on disk (tampered evidence)
     attestation: str | None = None
     signer: str | None = None
@@ -270,7 +271,9 @@ def check_attestation(
     try:
         found = fetch_attestation(h, settings)
     except SasError as exc:
-        return SasCheck(found=False, hash_used=h, recomputed=recomputed, detail=str(exc))
+        return SasCheck(
+            found=False, checked=False, hash_used=h, recomputed=recomputed, detail=str(exc)
+        )
     attestation = found.get("attestation")
     if not found.get("found"):
         detail = (

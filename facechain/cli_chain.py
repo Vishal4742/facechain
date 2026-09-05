@@ -12,6 +12,7 @@ from rich.console import Console
 
 from .cache import STATS, Cache
 from .chain.memo import explorer_url, format_memo, load_keypair, send_memo
+from .chain.sas import SasError, attest, require_sas, setup_sas
 from .chain.verify import read_receipt, render_report, verify_run
 from .config import Settings, load
 from .evidence.bundle import (
@@ -35,8 +36,48 @@ def _registry_pubkey(settings: Settings) -> str:
     return str(load_keypair(settings.solana_keypair_path).pubkey())
 
 
-def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
-    """Send the memo for a run directory's bundle and write receipt.json."""
+def _require_sas_or_exit(settings: Settings) -> None:
+    try:
+        require_sas(settings)
+    except SasError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(2) from exc
+
+
+def _write_receipt(run_dir: Path, receipt: dict[str, object]) -> None:
+    (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+
+def attest_run(run_dir: Path, settings: Settings) -> dict[str, object]:
+    """Create the SAS attestation for a run's bundle and record it in receipt.json."""
+    bundle = load_bundle(run_dir / "bundle.json")
+    started = time.perf_counter()
+    try:
+        record = attest(bundle, bundle["post"].get("media_cid"), settings)
+    except SasError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1) from exc
+    record["seconds"] = round(time.perf_counter() - started, 2)
+    receipt = read_receipt(run_dir) or {"bundle_hash": bundle_hash(bundle)}
+    previous = receipt.get("sas") or {}
+    if record.get("existed") and previous.get("attestation") == record["attestation"]:
+        record = {**previous, "existed": True}  # keep the original signature and timing
+    receipt["sas"] = record
+    _write_receipt(run_dir, receipt)
+    if record.get("existed"):
+        console.print(f"[dim]attestation already exists: {record['attestation']}[/dim]")
+    else:
+        console.print(
+            f"[bold green]attested[/bold green] in {record['seconds']}s: {record['attestation']}"
+            f"\nsas tx: {record['signature']}\nexplorer: {record['explorer']}"
+        )
+    return record
+
+
+def anchor_run(run_dir: Path, settings: Settings, *, sas: bool = False) -> dict[str, object]:
+    """Send the memo for a run directory's bundle and write receipt.json (+ SAS with --sas)."""
+    if sas:
+        _require_sas_or_exit(settings)
     bundle = load_bundle(run_dir / "bundle.json")
     h = bundle_hash(bundle)
     post, match = bundle["post"], bundle["match"]
@@ -57,9 +98,11 @@ def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
         "anchored_at": int(time.time()),
         "seconds": round(time.perf_counter() - started, 2),
     }
-    (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    _write_receipt(run_dir, receipt)
     console.print(f"[bold green]anchored[/bold green] in {receipt['seconds']}s: {signature}")
     console.print(f"explorer: {receipt['explorer']}")
+    if sas:
+        receipt["sas"] = attest_run(run_dir, settings)
     return receipt
 
 
@@ -76,6 +119,7 @@ def anchor_run(run_dir: Path, settings: Settings) -> dict[str, object]:
 @click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
 @click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
 @click.option("--no-anchor", is_flag=True, help="Stop after writing evidence; skip the chain.")
+@click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
 def run(
     image_path: Path,
     engines: str,
@@ -84,12 +128,15 @@ def run(
     live: bool,
     offline: bool,
     no_anchor: bool,
+    sas: bool,
 ) -> None:
-    """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo."""
+    """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo [+ SAS]."""
     from .pipeline import NoFaceError, run_search
     from .search.rank import render_table
 
     settings = load()
+    if sas and not no_anchor:
+        _require_sas_or_exit(settings)  # fail before spending a search or a memo
     cache = Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
     STATS.reset()
     engine_list = tuple(e.strip() for e in engines.split(",") if e.strip())
@@ -145,16 +192,17 @@ def run(
     console.print(f"winner: {winner.url}\nbundle sha256 (H): {bundle_hash(bundle)}")
     if no_anchor:
         raise SystemExit(0)
-    anchor_run(run_dir, settings)
+    anchor_run(run_dir, settings, sas=sas)
 
 
 @click.command()
 @click.option(
     "--run", "run_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path)
 )
-def anchor(run_dir: Path) -> None:
+@click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
+def anchor(run_dir: Path, sas: bool) -> None:
     """Anchor an existing run's bundle on devnet (writes receipt.json)."""
-    anchor_run(run_dir, load())
+    anchor_run(run_dir, load(), sas=sas)
 
 
 @click.command()
@@ -181,6 +229,48 @@ def verify(
         console.print(f"[yellow]tampered copy: {target}[/yellow]")
     receipt = read_receipt(run_dir or target)
     registry_key = str(registry or (receipt or {}).get("registry") or _registry_pubkey(settings))
-    report = verify_run(target, registry=registry_key, rpc_url=settings.solana_rpc_url)
+    report = verify_run(
+        target, registry=registry_key, rpc_url=settings.solana_rpc_url, settings=settings
+    )
     console.print(render_report(report))
     raise SystemExit(0 if report.ok else 1)
+
+
+@click.command("attest")
+@click.option(
+    "--run", "run_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path)
+)
+def attest_cmd(run_dir: Path) -> None:
+    """Create the SAS attestation for an already anchored run (no new memo)."""
+    settings = load()
+    _require_sas_or_exit(settings)
+    attest_run(run_dir, settings)
+
+
+@click.command("setup-sas")
+def setup_sas_cmd() -> None:
+    """One-time: create the SAS credential + schema on devnet and record them in .env."""
+    settings = load()
+    try:
+        result = setup_sas(settings)
+    except SasError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1) from exc
+    console.print(
+        f"credential: {result['credential']}\nschema: {result['schema']}\n"
+        f"authority: {result['authority']}\nprogram: {result['program']}"
+    )
+    for signature in result["txs"]:
+        console.print(f"tx: {signature}\n    {explorer_url(signature)}")
+    if not result["txs"]:
+        console.print("[dim]credential and schema already exist; nothing sent[/dim]")
+    env = result["env"]
+    written = ", ".join(env["written"]) or "nothing (keys already set)"
+    console.print(f"env: {env['path']} <- {written}")
+    for key, current in (
+        ("SAS_CREDENTIAL", settings.sas_credential),
+        ("SAS_SCHEMA", settings.sas_schema),
+    ):
+        expected = result["credential" if key == "SAS_CREDENTIAL" else "schema"]
+        if current and current != expected:
+            console.print(f"[yellow]{key} is set to {current}, expected {expected}[/yellow]")

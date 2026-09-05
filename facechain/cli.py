@@ -278,9 +278,16 @@ def search(
 
 
 from .cli_chain import anchor as _anchor  # noqa: E402
+from .cli_chain import attest_cmd as _attest  # noqa: E402
 from .cli_chain import run as _run  # noqa: E402
+from .cli_chain import setup_sas_cmd as _setup_sas  # noqa: E402
 from .cli_chain import verify as _verify  # noqa: E402
 
 main.add_command(_run, "run")
 main.add_command(_anchor, "anchor")
 main.add_command(_verify, "verify")
+main.add_command(_setup_sas, "setup-sas")
+main.add_command(_attest, "attest")
+
+if __name__ == "__main__":  # `python -m facechain.cli` (worktrees without a console script)
+    main()

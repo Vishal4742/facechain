@@ -6,15 +6,15 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1090
 source ~/.venvs/facechain/bin/activate
-IMG="${DEMO_IMAGE:-samples/kohli/subject.jpg}"
+IMG="${DEMO_IMAGE:-samples/ronaldo/subject.jpg}"
 LIVE="--live"; [ "${1:-}" = "--dry" ] && LIVE=""
 
 pause() { [ "${1:-}" = "--dry" ] || sleep "${DEMO_PAUSE:-2}"; }
 banner() { printf '\n\033[1;35m$ %s\033[0m\n' "$*"; }
 
 banner "facechain scan --image $IMG";               facechain scan --image "$IMG"; pause "$@"
-banner "facechain run --image $IMG $LIVE --engines lens,identity"
-facechain run --image "$IMG" $LIVE --engines lens,identity || { echo "run did not ACCEPT"; exit 1; }
+banner "facechain run --image $IMG $LIVE --engines lens,identity --sas"
+facechain run --image "$IMG" $LIVE --engines lens,identity --sas || { echo "run did not ACCEPT"; exit 1; }
 RUN="$(ls -td evidence/2* | grep -v _tampered | head -1)"; pause "$@"
 banner "sha256sum $RUN/bundle.json  (must equal h= in the memo)"; sha256sum "$RUN/bundle.json"; pause "$@"
 banner "facechain verify --run $RUN";               facechain verify --run "$RUN"; pause "$@"

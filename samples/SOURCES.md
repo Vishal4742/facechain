@@ -24,3 +24,15 @@ develop and demonstrate the pipeline. Regenerate this file with `python3 scripts
 | neg | `samples/neg/2019-final-da-copa-am-rica-2019-48225217491-cropped.jpg` | CC BY 2.0 | Palácio do Planalto | 2019-07-07 | [2019 Final da Copa América 2019 - 48225217491 (cropped).jpg](https://commons.wikimedia.org/wiki/File:2019_Final_da_Copa_Am%C3%A9rica_2019_-_48225217491_(cropped).jpg) |
 | neg | `samples/neg/george-russell-silverstone-2021-51349521638-cropped.jpg` | CC BY 2.0 | Jen Ross | 2021-07-15 | [George Russell, Silverstone 2021 (51349521638) (cropped).jpg](https://commons.wikimedia.org/wiki/File:George_Russell,_Silverstone_2021_(51349521638)_(cropped).jpg) |
 | neg | `samples/neg/shikhar-dhawan-16005494418.jpg` | CC BY-SA 2.0 | NAPARAZZI | 2015-01-04 | [SHIKHAR DHAWAN (16005494418).jpg](https://commons.wikimedia.org/wiki/File:SHIKHAR_DHAWAN_(16005494418).jpg) |
+
+## Demo subject decision (2026-09-05, first live searches)
+
+Rule from the build plan: social-domain rows, rows with detectable faces, best social post similarity, a post URL as winner, and a verified X handle on Wikidata. Two Lens searches per subject (visual + exact matches), 40 candidates face-verified each.
+
+| subject | social rows / verified | faces found | best social post | winner | Wikidata X handle |
+|---|---|---|---|---|---|
+| Cristiano Ronaldo | 40 / 40 (6 platforms) | 39 | 0.878 Instagram post | instagram.com/p/Db6Jg25gffC | @Cristiano (20 own posts verified, corroborated) |
+| Virat Kohli | 19 / 40 | 40 | 0.961 YouTube video | youtube.com/watch?v=XxuSG7CBBAQ | none on Wikidata |
+| Lewis Hamilton | 25 / 40 | 39 | 0.902 Pinterest pin | pinterest.com/pin/…460317493 | @LewisHamilton |
+
+All three are accepted by the rule; **Ronaldo is the primary demo subject** (richest social result, own-account corroboration). The winner in every run is chosen by the acceptance rule, never by hand.

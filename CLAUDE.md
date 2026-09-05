@@ -48,3 +48,7 @@ Append one line after every correction ("Update your CLAUDE.md so you don't make
 - `sas-lib@1.0.10` is CommonJS with `@solana/kit ^5` as a regular dependency: pin `@solana/kit@5.5.1` next to it (the 2.0 betas want kit ^7). Never import `@solana-program/memo` in the sidecar; the memo stays a separate Python transaction.
 - `sas.ts` runs under Node type stripping: erasable syntax only (`import type`, no enums/namespaces/parameter properties), enforced by `tsc --noEmit` with `erasableSyntaxOnly`.
 - `facechain/cli.py` needs its `if __name__ == "__main__"` guard: `python -m facechain.cli` otherwise imports and exits 0 silently.
+- Lens puts the Knowledge Graph id inside `related_content[].link` (`&kgmid=/m/…`), not in a `kgmid` field.
+- Instagram `lookaside.*` image URLs from Lens return 403 anonymously; always fall back to the gstatic thumbnail.
+- Round-robin engines before the verification cut-off, or Lens posts starve the identity path.
+- The X syndication timeline rate-limits per IP for about an hour after a burst; cached pages are served even with `--live`.

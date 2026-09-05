@@ -12,7 +12,7 @@ Date: 2026-09-05
 
 ## Verified (real output)
 - Specs written first: `pytest tests/test_filters.py tests/test_lens_parse.py tests/test_accept.py` → 3 collection errors (RED); after implementation 82 passed, pyright clean.
-- Live Lens call: **not yet run** — waiting for the SerpApi key in `.env`. First live run must record: search id, created_at, number of social candidates, winner similarity, searches left.
+- Live Lens (2026-09-05 03:21 UTC, SerpApi Free Plan, 6 searches used): Kohli 59 visual + 378 exact matches; Ronaldo 59 + 400; Hamilton 59 + 8 (search ids 6a9b8aaf…, 6a9b8ad2…, 6a9b8aec…). After fixes (thumbnail fallback, kgmid from links, lenient candidate gate, engine interleave): Kohli ACCEPT 0.961 (YouTube), Ronaldo ACCEPT 0.878 (Instagram; 40/40 social), Hamilton ACCEPT 0.902 (Pinterest). Re-runs from cache cost 0 searches; 244 searches left.
 
 ## Decisions
 - Non-social candidates are still face-verified (they corroborate identity) but only social post URLs can win.

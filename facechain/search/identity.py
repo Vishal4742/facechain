@@ -94,7 +94,7 @@ def parse_handles(data: dict[str, Any]) -> dict[str, Identity]:
         if not qid:
             continue
 
-        def val(key: str) -> str | None:
+        def val(key: str, row: dict[str, Any] = row) -> str | None:
             value = row.get(key, {}).get("value")
             return str(value) if value not in (None, "") else None
 

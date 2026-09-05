@@ -6,7 +6,7 @@ Date: 2026-09-05
 - `search/identity.py` — Lens hint → Wikidata: Knowledge Graph id (from the `related_content` link) via P2671 first, then name search restricted to humans whose label matches the hint; verified handles P2002/P2003/P2013/P7085/P2397.
 - `search/platforms/x.py` — syndication timeline (`__NEXT_DATA__` parse, posts with media), tweet-result hydration for x.com posts found by Lens, candidate conversion; timeline always served from cache (rate limit ≈ 30/15 min per IP).
 - `pipeline` — engines `lens,identity`; names mined from candidate titles when Lens gives no hint; social posts first with engines interleaved; identity-authored candidates corroborated (`identity:@handle`).
-- `chain/ipfs.py` — Pinata pin of post media (before hashing, `media_cid` in the bundle) and of `bundle.json` (CID in the memo); `verify --cid` materialises a run from IPFS. Unit-tested with a fake HTTP layer; **not exercised live (no PINATA_JWT provided)**.
+- `chain/ipfs.py` — Pinata pin of post media (before hashing, `media_cid` in the bundle) and of `bundle.json` (CID in the memo); `verify --cid` materialises a run from IPFS. Unit-tested with a fake HTTP layer and exercised live on 2026-09-05: media and bundle pinned, CID in the memo, `verify --cid` VERIFIED from IPFS alone.
 
 ## Verified (real output)
 - Wikidata: Ronaldo Q11571 → @Cristiano / @cristiano / @Cristiano / YouTube; Hamilton Q9673 → @LewisHamilton; Kohli Q213854 → Instagram/Facebook only; "cricketer" → no identity (label check).
@@ -18,5 +18,4 @@ Date: 2026-09-05
 - Path B is additive: it never blocks a run (timeline 429 → 0 posts, search continues).
 
 ## Open
-- Pinata live test and `verify --cid` demo need a JWT.
 - YouTube Data API path was cut (plan cut line).

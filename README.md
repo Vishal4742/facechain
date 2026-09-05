@@ -56,7 +56,7 @@ Keys and accounts:
 | What | Needed for | Where |
 |---|---|---|
 | `SERPAPI_KEY` | Google Lens search (Path A) | free plan at serpapi.com, 250 searches/month |
-| `PINATA_JWT` | pinning the evidence to IPFS (optional) | free plan at pinata.cloud |
+| `PINATA_JWT` | pinning the evidence to IPFS (optional; the sample run is pinned) | free plan at pinata.cloud |
 | Solana keypair | signing the devnet memo and attestation | `solana-keygen new`, fund at faucet.solana.com; path in `SOLANA_KEYPAIR_PATH` |
 | `SAS_CREDENTIAL`, `SAS_SCHEMA` | the attestation record (optional) | written by `facechain setup-sas` |
 
@@ -96,7 +96,7 @@ Tamper demo: `verify --tamper` copies the run, flips the middle byte of `post_me
 - **Record 1:** SPL Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`, one transaction per accepted match, fee 5000 lamports.
 - **Record 2 (`--sas`):** [Solana Attestation Service](https://github.com/solana-foundation/solana-attestation-service) program `22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG`; credential `Awhv5DjjmeeGZPxeMim1hW8yWKgMJtUFD2dX7BrArpzh` (`FACECHAIN`), schema `DNnsTXgmuPDsb3gKF8rgYsnRYP7h6qLEMC9udtxofpDD` (`FaceMatchV1`: `bundle_hash`, `cid`, `post_url`, `similarity_bps`), one attestation per bundle with nonce = H, no expiry. Built with `sas-lib` + `@solana/kit` in `chain-ts/sas.ts`, driven from Python over JSON.
 - **Registry wallet:** `9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX` (demo key; a record is only trusted when this key signed it).
-- **Committed sample run** (`evidence/sample_run/`, Cristiano Ronaldo, Instagram winner at similarity 0.88): memo tx [2wRJXvnM…](https://explorer.solana.com/tx/2wRJXvnMAH9h6ZG9oXAa741mGtpkb3LwF35BdsVWm6rVogVzsciHfuA?cluster=devnet), attestation PDA `5CiaguKGCsZafw9ofKenFbHS2qoNQJ2qeU3h38cKCD8c`. Re-verify it yourself: `facechain verify --run evidence/sample_run` (needs only the public devnet RPC).
+- **Committed sample run** (`evidence/sample_run/`, Cristiano Ronaldo, Instagram winner at similarity 0.88): memo tx [2UZiq877…](https://explorer.solana.com/tx/2UZiq877N8gcJQWndUZinzmP6f19R8U1NXg18fDu6Zfg7WDm5D5bvzq2g7PuTk4tXwGGSYjrb1nDDwee1pqBdihw?cluster=devnet), attestation PDA `v9Ui5T4wKzxMitn5vfs3Bnv1ZBeM7orkJWbTM8AF72N`, bundle on IPFS `bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`, post media `bafkreie5gwsu3egkxodd5xwxmq5xdpqjuvxk3b4qvujwakyufuzhkj7duu`. Re-verify it yourself with only the public devnet RPC: `facechain verify --run evidence/sample_run`, or from IPFS alone: `facechain verify --cid bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`.
 
 ## Evidence bundle
 

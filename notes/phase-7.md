@@ -3,7 +3,7 @@
 Date: 2026-09-05 (deadline 2026-09-07 23:59)
 
 ## State
-- `evidence/sample_run/` committed from a real run (Ronaldo): memo tx `2wRJXvnMAH9h6ZG9oXAa741mGtpkb3LwF35BdsVWm6rVogVzsciHfuA`, attestation `5CiaguKGCsZafw9ofKenFbHS2qoNQJ2qeU3h38cKCD8c`, `facechain verify --run evidence/sample_run` → VERIFIED from a clean checkout with no keys.
+- `evidence/sample_run/` committed from a real run (Ronaldo): memo tx `2UZiq877N8gcJQWndUZinzmP6f19R8U1NXg18fDu6Zfg7WDm5D5bvzq2g7PuTk4tXwGGSYjrb1nDDwee1pqBdihw`, attestation `v9Ui5T4wKzxMitn5vfs3Bnv1ZBeM7orkJWbTM8AF72N`, bundle CID `bafkreifi6hsyxzmuls65743epgtgtmtpzmea2tp3bfrdpenaut5jiz2yym`, `facechain verify --run evidence/sample_run` → VERIFIED from a clean checkout with no keys.
 - `scripts/demo.sh --dry` end to end in ~60 s (cache on). The real take uses `--live` (2 fresh Lens searches, ids printed).
 - README covers what / how to run / which chain / limitations (task requirement).
 
@@ -21,5 +21,5 @@ Date: 2026-09-05 (deadline 2026-09-07 23:59)
 - Form: https://forms.gle/oZbQGuwiNeHVcHWo8 — repo link + recording link. No resubmissions.
 
 ## Cut line status
-- Shipped: Lens (Path A), identity hop + X (Path B), memo, SAS attestation, Pinata code path (untested live: no JWT), tests, CI, README.
+- Shipped: Lens (Path A), identity hop + X (Path B), memo, SAS attestation, Pinata pinning + `verify --cid` (live), tests, CI, README.
 - Cut: YouTube Data API, Google Vision, FaceCheck/Yandex, custom Anchor program.

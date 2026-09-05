@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from .cache import STATS, Cache
 from .config import Settings, load
 
 console = Console()
@@ -189,3 +190,88 @@ def doctor(online: bool, as_json: bool) -> None:
     required = {"model buffalo_l", "Solana keypair", "cache dir", "thresholds"}
     if any(not ok for check, ok, _ in rows if check in required):
         raise SystemExit(1)
+
+
+def _event_printer(level: str, message: str) -> None:
+    style = {"error": "bold red", "warn": "yellow"}.get(level, "dim")
+    console.print(f"[{style}]{message}[/{style}]")
+
+
+def _make_cache(settings: Settings, *, live: bool, offline: bool) -> Cache:
+    return Cache(settings.cache_dir, offline=offline or settings.offline, live=live)
+
+
+@main.command()
+@click.option(
+    "--image",
+    "image_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Photo containing the face to identify.",
+)
+@click.option("--engines", default="lens", show_default=True, help="Comma-separated engines.")
+@click.option("--max-candidates", default=40, show_default=True, type=int)
+@click.option("--face-index", type=int, default=None, help="Pick this face instead of the largest.")
+@click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
+@click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
+@click.option("--json", "json_out", type=click.Path(dir_okay=False, path_type=Path), default=None)
+def search(
+    image_path: Path,
+    engines: str,
+    max_candidates: int,
+    face_index: int | None,
+    live: bool,
+    offline: bool,
+    json_out: Path | None,
+) -> None:
+    """Find social posts showing this face: reverse image search + face verification."""
+    from .pipeline import NoFaceError, run_search
+    from .search.lens import account_searches_left
+    from .search.rank import render_table
+
+    settings = load()
+    cache = _make_cache(settings, live=live, offline=offline)
+    STATS.reset()
+    started = time.perf_counter()
+    try:
+        outcome = run_search(
+            image_path.read_bytes(),
+            settings,
+            cache,
+            engines=tuple(e.strip() for e in engines.split(",") if e.strip()),
+            max_candidates=max_candidates,
+            face_index=face_index,
+            on_event=_event_printer,
+        )
+    except NoFaceError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(2) from exc
+
+    console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
+    decision = outcome.decision
+    style = "bold green" if decision.accepted else "bold yellow"
+    console.print(f"[{style}]{decision.reason}[/{style}]")
+    if decision.winner is not None:
+        console.print(f"winner: {decision.winner.url}")
+    console.print(f"{STATS.summary()}; {time.perf_counter() - started:.1f}s")
+    if any(m.live for m in outcome.meta) and settings.serpapi_key:
+        left = account_searches_left(settings.serpapi_key)
+        if left is not None:
+            console.print(f"SerpApi searches left this month: {left}")
+
+    if json_out is not None:
+        payload = {
+            "image": str(image_path),
+            "face_id": outcome.face_id,
+            "decision": {
+                "accepted": decision.accepted,
+                "reason": decision.reason,
+                "winner": decision.winner.url if decision.winner else None,
+            },
+            "hints": [{"query": h.query, "kgmid": h.kgmid} for h in outcome.hints],
+            "search_metadata": [m.__dict__ for m in outcome.meta],
+            "candidates": [c.to_dict() for c in outcome.candidates],
+        }
+        json_out.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+        console.print(f"wrote {json_out}")
+    raise SystemExit(0 if decision.accepted else 2)

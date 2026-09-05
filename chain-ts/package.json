@@ -1,0 +1,21 @@
+{
+  "name": "facechain-chain-ts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solana Attestation Service sidecar for facechain (JSON stdin -> JSON stdout)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/kit": "5.5.1",
+    "sas-lib": "1.0.10"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "5.9.3"
+  }
+}

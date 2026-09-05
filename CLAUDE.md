@@ -10,7 +10,8 @@ HH Goa 2026 shortlisting Task 3. Pipeline: face photo → genuine social search 
 ## Commands
 - Activate venv: `source ~/.venvs/facechain/bin/activate` (venv lives on ext4, never under `/mnt/d`)
 - Install editable: `pip install -e .`
-- CLI: `facechain scan|search|run|anchor|verify|setup-sas` (see README)
+- CLI: `facechain scan|search|run|anchor|attest|verify|setup-sas` (see README); in a worktree use `python -m facechain.cli …` (the console script resolves to the main checkout)
+- SAS sidecar: `cd chain-ts && npm ci` (Node ≥ 22.6), typecheck `npx tsc --noEmit -p chain-ts`; `facechain setup-sas` once, then `anchor --sas` / `run --sas` / `attest --run DIR`
 - Tests: `pytest -q` · coverage: `pytest --cov=facechain --cov-report=term-missing`
 - Lint/format: `ruff check --fix . && ruff format .` · types: `pyright`
 - Smoke: `scripts/smoke.sh` (`SMOKE_CHAIN=1` adds anchor + verify + tamper on devnet)
@@ -43,4 +44,7 @@ Append one line after every correction ("Update your CLAUDE.md so you don't make
 - Never cache an empty Lens result; SerpApi's "no results" can be transient.
 - Any error text that can reach the screen goes through `http.redact()` first (API keys ride in query strings).
 - The ruff hook only fires for Write/Edit in a fresh session; run `ruff format . && ruff check --fix .` before every commit.
-- Exceptions to "network only via http.py": Solana RPC calls (solana-py client) and the stdlib-only `scripts/fetch_samples.py`.
+- Exceptions to "network only via http.py": Solana RPC calls (solana-py client), the `chain-ts/sas.ts` sidecar (its own RPC via `@solana/kit`) and the stdlib-only `scripts/fetch_samples.py`.
+- `sas-lib@1.0.10` is CommonJS with `@solana/kit ^5` as a regular dependency: pin `@solana/kit@5.5.1` next to it (the 2.0 betas want kit ^7). Never import `@solana-program/memo` in the sidecar; the memo stays a separate Python transaction.
+- `sas.ts` runs under Node type stripping: erasable syntax only (`import type`, no enums/namespaces/parameter properties), enforced by `tsc --noEmit` with `erasableSyntaxOnly`.
+- `facechain/cli.py` needs its `if __name__ == "__main__"` guard: `python -m facechain.cli` otherwise imports and exits 0 silently.

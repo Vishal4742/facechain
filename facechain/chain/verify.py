@@ -11,8 +11,10 @@ from typing import Any
 
 from rich.table import Table
 
-from ..evidence.bundle import LocalResult, verify_local
+from ..config import Settings
+from ..evidence.bundle import LocalResult, load_bundle, verify_local
 from .memo import MemoHit, explorer_url, find_memo, parse_memo, tx_memo
+from .sas import SasCheck, check_attestation, sas_configured
 
 
 @dataclass(frozen=True)
@@ -34,6 +36,7 @@ class Report:
     chain: ChainResult
     registry: str
     verdict: str  # VERIFIED | TAMPERED | UNANCHORED
+    sas: SasCheck | None = None  # None when SAS_CREDENTIAL / SAS_SCHEMA are not configured
 
     @property
     def ok(self) -> bool:
@@ -75,7 +78,9 @@ async def verify_chain(
     )
 
 
-def verify_run(run_dir: Path, *, registry: str, rpc_url: str) -> Report:
+def verify_run(
+    run_dir: Path, *, registry: str, rpc_url: str, settings: Settings | None = None
+) -> Report:
     local = verify_local(run_dir)
     receipt = read_receipt(run_dir)
     chain = asyncio.run(
@@ -87,14 +92,24 @@ def verify_run(run_dir: Path, *, registry: str, rpc_url: str) -> Report:
         )
     )
     fields = chain.memo_fields or {}
+    sas: SasCheck | None = None
+    if settings is not None and sas_configured(settings):
+        bundle = load_bundle(run_dir / "bundle.json")
+        # the memo names the bundle's CID ("-" -> None); the attestation must carry the same one
+        expected_cid = (fields.get("cid") or "") if chain.found else None
+        sas = check_attestation(
+            local, bundle, registry=registry, settings=settings, expected_cid=expected_cid
+        )
     media_matches_chain = bool(local.media_sha256) and fields.get("media") == local.media_sha256
-    if chain.found and chain.signer_ok and local.ok and media_matches_chain:
+    if sas is not None and sas.found and not sas.ok:
+        verdict = "TAMPERED"  # an attestation exists but disagrees with the bundle or registry
+    elif chain.found and chain.signer_ok and local.ok and media_matches_chain:
         verdict = "VERIFIED"
     elif not chain.found and local.ok:
         verdict = "UNANCHORED"
     else:
         verdict = "TAMPERED"
-    return Report(local=local, chain=chain, registry=registry, verdict=verdict)
+    return Report(local=local, chain=chain, registry=registry, verdict=verdict, sas=sas)
 
 
 def _fmt_time(ts: int | None) -> str:
@@ -126,4 +141,26 @@ def render_report(report: Report) -> Table:
         table.add_row("explorer", explorer_url(chain.signature or ""))
     else:
         table.add_row("memo tx", f"[yellow]{chain.detail}[/yellow]")
+    _add_sas_rows(table, report.sas)
     return table
+
+
+def _add_sas_rows(table: Table, sas: SasCheck | None) -> None:
+    if sas is None:
+        table.add_row("attestation", "[dim]SAS not configured (facechain setup-sas)[/dim]")
+        return
+    origin = "recomputed from the media on disk" if sas.recomputed else "stored bundle.json"
+    table.add_row("attestation nonce", f"H = {sas.hash_used}\n({origin})")
+    table.add_row("attestation PDA", sas.attestation or f"[yellow]{sas.detail}[/yellow]")
+    if not sas.found:
+        table.add_row("attestation", f"[yellow]ABSENT: {sas.detail}[/yellow]")
+        return
+    table.add_row("attestation", "found" + (f" (expires {sas.expiry})" if sas.expiry else ""))
+    table.add_row(
+        "attestation signer",
+        "ok" if sas.signer_ok else f"[red]NO ({sas.signer})[/red]",
+    )
+    table.add_row(
+        "attestation fields",
+        "match bundle" if sas.fields_ok else "[red]" + "; ".join(sas.mismatches) + "[/red]",
+    )

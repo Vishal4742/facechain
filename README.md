@@ -16,10 +16,12 @@ Built for the HH Goa 2026 shortlisting, Task 3 (Face Identification & Blockchain
                                                     │
                      evidence bundle (canonical JSON, ints only) → H = sha256
                      ├─ IPFS (Pinata, optional)  → CID
-                     └─ Solana devnet: SPL Memo  h=H media=… cid=… sim=… url=…
+                     ├─ Solana devnet: SPL Memo  h=H media=… cid=… sim=… url=…
+                     └─ Solana devnet: SAS attestation, nonce = H (--sas)
                                                     │
-                     verify: re-hash stored files → wallet scan for h=H → VERIFIED
-                     verify --tamper: flip one byte → TAMPERED
+                     verify: re-hash stored files → wallet scan for h=H
+                             → derive attestation PDA from H → VERIFIED
+                     verify --tamper: flip one byte → TAMPERED, attestation ABSENT
 ```
 
 Reverse image search only *proposes* pages. What decides is the ArcFace similarity between the scanned face and the faces inside each candidate's media, plus corroboration (a second candidate above 0.40, or the post being authored by the identity Wikidata resolved). That is what makes this face identification rather than duplicate-image lookup, and every candidate with its score is printed so the search is visibly real.
@@ -30,7 +32,7 @@ Screen recording: _link to be added at submission_.
 
 ## Quickstart
 
-Linux or WSL2, Python 3.12, about 1 GB of disk for the face model. Node 24 is only needed for the optional attestation sidecar.
+Linux or WSL2, Python 3.12, about 1 GB of disk for the face model. Node ≥ 22.6 (24 tested) is only needed for the optional attestation sidecar.
 
 ```bash
 git clone https://github.com/Vishal4742/facechain && cd facechain
@@ -44,6 +46,9 @@ unzip -o /tmp/buffalo_l.zip -d ~/.insightface/models/buffalo_l
 
 cp .env.example .env        # then fill in SERPAPI_KEY (required), PINATA_JWT (optional)
 facechain doctor --online   # model, keys, wallet, devnet balance
+
+(cd chain-ts && npm ci)     # optional: SAS sidecar deps (sas-lib 1.0.10 + @solana/kit 5.5.1)
+facechain setup-sas         # optional, once: SAS credential + schema; addresses written to .env
 ```
 
 Keys and accounts:
@@ -52,7 +57,8 @@ Keys and accounts:
 |---|---|---|
 | `SERPAPI_KEY` | Google Lens search (Path A) | free plan at serpapi.com, 250 searches/month |
 | `PINATA_JWT` | pinning the evidence to IPFS (optional) | free plan at pinata.cloud |
-| Solana keypair | signing the devnet memo | `solana-keygen new`, fund at faucet.solana.com; path in `SOLANA_KEYPAIR_PATH` |
+| Solana keypair | signing the devnet memo and attestation | `solana-keygen new`, fund at faucet.solana.com; path in `SOLANA_KEYPAIR_PATH` |
+| `SAS_CREDENTIAL`, `SAS_SCHEMA` | the attestation record (optional) | written by `facechain setup-sas` |
 
 ## Commands
 
@@ -60,13 +66,16 @@ Keys and accounts:
 facechain scan   --image samples/kohli/subject.jpg                 # faces, quality, which face is the query
 facechain search --image samples/kohli/subject.jpg --engines lens,identity   # ranked candidates, ACCEPT/REVIEW
 facechain run    --image samples/kohli/subject.jpg --engines lens,identity   # search + evidence bundle + devnet memo
-facechain anchor --run evidence/<run_id>                            # (re)anchor an existing bundle
-facechain verify --run evidence/<run_id>                            # re-hash evidence, find the memo, VERIFIED?
+facechain run    --image samples/kohli/subject.jpg --engines lens,identity --sas   # ... + SAS attestation
+facechain anchor --run evidence/<run_id> [--sas]                    # (re)anchor an existing bundle
+facechain attest --run evidence/<run_id>                            # attest a run anchored earlier (no new memo)
+facechain verify --run evidence/<run_id>                            # re-hash evidence, memo + attestation, VERIFIED?
 facechain verify --run evidence/<run_id> --tamper                   # flip one byte of the media → TAMPERED
 facechain verify --cid <bundle CID>                                 # third-party check from IPFS alone
+facechain setup-sas                                                 # one-time SAS credential + schema
 ```
 
-Flags: `--live` bypasses cached search reads so every Lens call is fresh (used on camera; SerpApi's search id and timestamp are printed). `--offline` never touches the network. `--no-anchor` and `--no-pin` skip the chain and IPFS steps.
+Flags: `--live` bypasses cached search reads so every Lens call is fresh (used on camera; SerpApi's search id and timestamp are printed). `--offline` never touches the network. `--no-anchor` and `--no-pin` skip the chain and IPFS steps. `--sas` adds the attestation transaction after the memo (refuses to start until `setup-sas` has run).
 
 Exit codes: `0` accepted / verified, `1` verification failed, `2` no face or the match was not accepted (REVIEW), `3` an engine failed.
 
@@ -75,18 +84,19 @@ Exit codes: `0` accepted / verified, `1` verification failed, `2` no face or the
 1. `facechain run` writes `evidence/<run_id>/` with `query.jpg`, `candidates.json` (the whole ranked table), `post_media.jpg` (the matched post's image exactly as downloaded), `post.json`, and `bundle.json`.
 2. `bundle.json` is canonical JSON (sorted keys, no whitespace, UTF-8, integers only: similarity is stored in basis points). Its SHA-256 is **H**. Because the file holds exactly the hashed bytes, `sha256sum bundle.json` prints H.
 3. The memo transaction, signed by the registry wallet, carries `FACECHAIN/1 h=<H> media=<sha256 of post_media> cid=<bundle CID or -> sim=<bps> url=<post url>`.
-4. `facechain verify` re-hashes the stored files, scans the registry wallet's signatures for a memo containing `h=<H>`, reads the transaction, checks the signer, and compares the media hash in the memo with the file on disk. Nothing is re-downloaded, so the verdict depends only on what is stored and what is on chain.
-5. Anyone can repeat step 4 with just `bundle.json`, `post_media.jpg`, the registry public key and a public devnet RPC. With Pinata configured, `verify --cid` fetches both files from IPFS first.
+4. With `--sas`, a second transaction creates a Solana Attestation Service record `{bundle_hash, cid, post_url, similarity_bps}` whose nonce **is** H, so the attestation address is derivable from `bundle.json` alone: `PDA("attestation", credential, schema, H)`.
+5. `facechain verify` re-hashes the stored files, scans the registry wallet's signatures for a memo containing `h=<H>`, reads the transaction, checks the signer, and compares the media hash in the memo with the file on disk. When SAS is configured it also derives the attestation PDA, fetches it and checks the signer and every field against the bundle. Nothing is re-downloaded, so the verdict depends only on what is stored and what is on chain.
+6. Anyone can repeat step 5 with just `bundle.json`, `post_media.jpg`, the registry public key and a public devnet RPC. With Pinata configured, `verify --cid` fetches both files from IPFS first.
 
-Tamper demo: `verify --tamper` copies the run, flips the middle byte of `post_media.jpg`, and re-verifies. The memo is still found, but the media hash no longer matches → **TAMPERED**.
+Tamper demo: `verify --tamper` copies the run, flips the middle byte of `post_media.jpg`, and re-verifies. The memo is still found, but the media hash no longer matches → **TAMPERED**. The attestation PDA is derived from the evidence as it is on disk (the bundle re-hashed with the actual media digest), so it comes back **ABSENT**: nobody ever attested that evidence.
 
 ## Blockchain
 
 - **Network:** Solana devnet (`https://api.devnet.solana.com`).
-- **Record:** SPL Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`, one transaction per accepted match, fee 5000 lamports.
-- **Registry wallet:** `9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX` (demo key; the record is only trusted when this key signed it).
-- **Example (synthetic bundle used during development):** [5RHpH7BM…](https://explorer.solana.com/tx/5RHpH7BMJ3h2K1YmozsGc6T53swmZyHDKD6tCWFWRtCTEpzzoA75QQWjEpcwBXjjrfirTTyMe3BHHZ9LLPCZStqn?cluster=devnet).
-- **Solana Attestation Service:** an attestation keyed by H (nonce = the 32 bytes of the bundle hash) is being added as a second, standards-based record; see `notes/phase-6.md` for status.
+- **Record 1:** SPL Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`, one transaction per accepted match, fee 5000 lamports.
+- **Record 2 (`--sas`):** [Solana Attestation Service](https://github.com/solana-foundation/solana-attestation-service) program `22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG`; credential `Awhv5DjjmeeGZPxeMim1hW8yWKgMJtUFD2dX7BrArpzh` (`FACECHAIN`), schema `DNnsTXgmuPDsb3gKF8rgYsnRYP7h6qLEMC9udtxofpDD` (`FaceMatchV1`: `bundle_hash`, `cid`, `post_url`, `similarity_bps`), one attestation per bundle with nonce = H, no expiry. Built with `sas-lib` + `@solana/kit` in `chain-ts/sas.ts`, driven from Python over JSON.
+- **Registry wallet:** `9ziKFvAU74jNa8RxnDZRxf2AGoDtCafpzvLXYZP5a1MX` (demo key; a record is only trusted when this key signed it).
+- **Example (synthetic bundle used during development):** memo [5RHpH7BM…](https://explorer.solana.com/tx/5RHpH7BMJ3h2K1YmozsGc6T53swmZyHDKD6tCWFWRtCTEpzzoA75QQWjEpcwBXjjrfirTTyMe3BHHZ9LLPCZStqn?cluster=devnet), attestation [2PbkcAdr…pU5A](https://explorer.solana.com/address/2PbkcAdrUECskxUMPQsEVYjczqWohPYcsAEU9F54pU5A?cluster=devnet) (tx [3yyEhUpm…](https://explorer.solana.com/tx/3yyEhUpmUfyypT2brnwJTxxNB1vhmt5Q5KfAi7tUnhpZWe4udj5Wj9NBqH1CfjTHF97YHyyJ33zetDRCvvByimJN?cluster=devnet)).
 
 ## Evidence bundle
 
@@ -112,6 +122,7 @@ The repo carries its engineering harness: `CLAUDE.md`, per-phase notes in `notes
 ```bash
 pytest -q --cov=facechain          # 100+ tests; model-backed tests skip without the model pack
 ruff check . && ruff format --check . && pyright
+npx tsc --noEmit -p chain-ts       # typecheck the SAS sidecar
 scripts/smoke.sh                   # checks + tests + offline pipeline; SMOKE_CHAIN=1 adds a devnet round trip
 python scripts/calibrate.py --pos samples/kohli --neg samples/neg --markdown
 ```

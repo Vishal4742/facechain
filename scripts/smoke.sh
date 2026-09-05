@@ -28,7 +28,9 @@ fi
 if [ "${SMOKE_CHAIN:-0}" = "1" ]; then
   RUN="$(ls -td evidence/2* 2>/dev/null | grep -v _tampered | head -1)"
   [ -n "$RUN" ] || fail "no evidence run to anchor"
-  step "anchor $RUN"; facechain anchor --run "$RUN" || fail "anchor"
+  SAS_FLAG=""
+  if grep -Eq '^SAS_CREDENTIAL=.+' .env 2>/dev/null; then SAS_FLAG="--sas"; fi
+  step "anchor $RUN $SAS_FLAG"; facechain anchor --run "$RUN" $SAS_FLAG || fail "anchor"
   step "verify";      facechain verify --run "$RUN" || fail "verify did not report VERIFIED"
   step "tamper";      if facechain verify --run "$RUN" --tamper; then fail "tampered run verified"; fi
   echo "tamper test: TAMPERED as expected"

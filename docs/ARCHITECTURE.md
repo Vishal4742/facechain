@@ -114,12 +114,12 @@ Per run: `evidence/<run_id>/` containing `query.jpg`, `candidates.json` (full ra
 ### Off-chain evidence: IPFS via Pinata
 - Free tier (1 GB / 500 files). `POST https://uploads.pinata.cloud/v3/files` (multipart `file`, `network=public`, `Authorization: Bearer <JWT>`) → CID for `bundle.json` and the media file (or a single CAR/tar). Fetch via `https://<gateway>.mypinata.cloud/ipfs/<cid>`.
 
-### On-chain record: one transaction, two instructions
+### On-chain record: two transactions (memo from Python, attestation from the sidecar)
 1. **Solana Attestation Service (SAS) attestation** — Solana Foundation's attestation standard, program `22zoJMtdu4tQc2PzL74ZUT7FrwgB1Udec8DdW4yw4BdG` (same id on devnet and mainnet).
-   - One-time setup: create Credential (authority = registry wallet) and Schema `FaceMatchV1 { bundle_hash: bytes32, media_hash: bytes32, face_id: bytes32, similarity_bps: u64, found_at: i64, post_url: String, cid: String }`.
+   - One-time setup (`facechain setup-sas`): Credential `FACECHAIN` (authority = registry wallet) and Schema `FaceMatchV1` v1 `{ bundle_hash: String, cid: String, post_url: String, similarity_bps: u64 }` (layout `[12,12,12,3]`). Everything else lives in the bundle the hash commits to. Devnet: credential `Awhv5DjjmeeGZPxeMim1hW8yWKgMJtUFD2dX7BrArpzh`, schema `DNnsTXgmuPDsb3gKF8rgYsnRYP7h6qLEMC9udtxofpDD` (Phase 6).
    - Per record: `create_attestation` with **`nonce = Pubkey(H)`** so the attestation PDA `["attestation", credential, schema, nonce]` is derivable from the bundle alone. `expiry = 0`.
-   - Implementation: TypeScript sidecar (`chain-ts/sas.ts`, `sas-lib` 1.0.x + `@solana/kit`) called from Python with JSON in/out. (Python `saslibpy` requires solana<0.40; `anchorpy` is unmaintained — do not use either.)
-2. **SPL Memo** (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) in the same tx with a ≤ 500-byte summary: `FACECHAIN/1 h=<H> media=<media_sha256> cid=<CID> sim=<bps> url=<post_url>`. Makes the record human-readable in explorers and gives a second, program-free lookup path.
+   - Implementation: TypeScript sidecar (`chain-ts/sas.ts`, `sas-lib@1.0.10` + `@solana/kit@5.5.1`, run by Node ≥ 22.6 type stripping) called from Python (`chain/sas.py`) with JSON in/out. (Python `saslibpy` requires solana<0.40; `anchorpy` is unmaintained — do not use either.)
+2. **SPL Memo** (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) in its own transaction, sent first, with a ≤ 500-byte summary: `FACECHAIN/1 h=<H> media=<media_sha256> cid=<CID> sim=<bps> url=<post_url>`. Makes the record human-readable in explorers and gives a second, program-free lookup path.
 
 Signed by the **registry wallet** (`~/.config/solana/id.json`, 8.86 SOL on devnet — enough; keep the pubkey in the README). Print signature + `https://explorer.solana.com/tx/<sig>?cluster=devnet`.
 
@@ -134,7 +134,7 @@ Signed by the **registry wallet** (`~/.config/solana/id.json`, 8.86 SOL on devne
 `facechain verify --bundle evidence/<run>/bundle.json` (or `--cid <CID>`, which fetches the bundle + media from IPFS first):
 1. Recompute `media_sha256` from the local/IPFS media and check it equals the bundle field (local integrity).
 2. Recompute `H` from the canonical bundle.
-3. **SAS path:** derive attestation PDA from `nonce = Pubkey(H)` → `getAccountInfo` → deserialize → compare `bundle_hash`, `media_hash`, `similarity_bps`, `cid`, `post_url`; check the attestation signer is the registry wallet.
+3. **SAS path** (when `SAS_CREDENTIAL` / `SAS_SCHEMA` are set): derive the attestation PDA from `nonce = Pubkey(H)` → fetch → deserialize → compare `bundle_hash`, `cid`, `post_url`, `similarity_bps` with the bundle; check the attestation signer is the registry wallet. H is taken from the evidence as it is on disk: if the media no longer matches the bundle, the bundle is re-hashed with the actual media digest, so a tampered run derives a PDA nobody attested (`attestation ABSENT`). An attestation that exists but disagrees with the bundle or the registry → TAMPERED.
 4. **Memo path:** `getSignaturesForAddress(registry)` → find the signature whose `memo` contains `h=<H>` → `getTransaction(jsonParsed)` → confirm signer, slot, block time.
 5. Print **VERIFIED** with signature, slot, block time, explorer link.
 

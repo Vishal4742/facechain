@@ -21,7 +21,9 @@ def test_defaults_when_nothing_is_set(tmp_path: Path, monkeypatch: pytest.Monkey
     assert s.offline is True  # conftest sets FACECHAIN_OFFLINE=1
 
 
-def test_env_file_is_read_but_real_env_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_file_is_read_but_real_env_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text("SERPAPI_KEY=from-file\nMATCH_THRESHOLD=0.5\n")
     monkeypatch.setenv("MATCH_THRESHOLD", "0.6")
@@ -30,7 +32,9 @@ def test_env_file_is_read_but_real_env_wins(tmp_path: Path, monkeypatch: pytest.
     assert s.match_threshold == 0.6
 
 
-def test_tilde_paths_expand_and_dirs_are_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tilde_paths_expand_and_dirs_are_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FACECHAIN_CACHE_DIR", "~/somewhere/cache")
     s = load()

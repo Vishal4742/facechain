@@ -120,7 +120,7 @@ def parse_lens_response(data: dict[str, Any], *, engine: str) -> tuple[list[Cand
     candidates: list[Candidate] = []
     for index, item in enumerate(data.get(key) or []):
         link = item.get("link")
-        if not isinstance(link, str) or not link:
+        if not isinstance(link, str) or not link or _is_google_redirect(link):
             continue
         candidates.append(
             Candidate.from_url(
@@ -144,6 +144,12 @@ def parse_lens_response(data: dict[str, Any], *, engine: str) -> tuple[list[Cand
         if hint not in hints:
             hints.append(hint)
     return candidates, hints
+
+
+def _is_google_redirect(link: str) -> bool:
+    """Lens sometimes lists Google's own redirect/search URLs; they are not pages of interest."""
+    host = urlparse(link).netloc.lower()
+    return host == "google.com" or host.endswith(".google.com")
 
 
 def _kgmid_from_link(link: Any) -> str | None:

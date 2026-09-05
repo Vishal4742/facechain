@@ -35,6 +35,7 @@ FIXTURE = {
             "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:thumb3",
         },
         {"position": 4, "title": "broken entry without link"},
+        {"position": 5, "title": "google redirect", "link": "https://www.google.com/goto?x=1"},
     ],
     "related_content": [
         {

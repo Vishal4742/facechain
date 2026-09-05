@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +41,66 @@ class SearchOutcome:
 
 class NoFaceError(RuntimeError):
     """The query image contains no detectable face."""
+
+
+def prioritise(cands: list[Candidate]) -> list[Candidate]:
+    """Social posts first, then social profiles, then other pages; engine order within each."""
+    posts = [c for c in cands if c.platform and c.is_post]
+    profiles = [c for c in cands if c.platform and not c.is_post]
+    others = [c for c in cands if not c.platform]
+    return posts + profiles + others
+
+
+NAME_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b")
+NAME_STOPWORDS = {
+    "The",
+    "This",
+    "That",
+    "Photo",
+    "Image",
+    "Images",
+    "News",
+    "Stock",
+    "Getty",
+    "Alamy",
+    "Instagram",
+    "Facebook",
+    "Twitter",
+    "Pinterest",
+    "Reddit",
+    "YouTube",
+    "TikTok",
+    "India",
+    "Cricket",
+    "Sports",
+    "Premium",
+    "Editorial",
+    "Free",
+    "Best",
+    "Top",
+    "New",
+    "Latest",
+    "Live",
+    "Video",
+    "Videos",
+    "Watch",
+    "Wallpaper",
+    "Wallpapers",
+    "HD",
+}
+
+
+def mine_names(titles: list[str], *, min_count: int = 3) -> list[str]:
+    """Most frequent capitalised 2-3 word sequences across candidate titles (likely the person)."""
+    counts: dict[str, int] = {}
+    for title in titles:
+        for match in NAME_RE.findall(title):
+            words = match.split()
+            if any(w in NAME_STOPWORDS for w in words):
+                continue
+            counts[match] = counts.get(match, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0])))
+    return [name for name, n in ranked if n >= min_count]
 
 
 def _identity_candidates(
@@ -100,9 +161,14 @@ def run_search(
         hints.extend(result.hints)
         meta.extend(result.meta)
     if "identity" in engines:
+        if not hints:
+            mined = mine_names([c.title for c in candidates if c.title])
+            if mined:
+                emit("info", f"identity: no Lens hint; names mined from titles: {mined[:3]}")
+                hints = [Hint(query=name, kgmid=None) for name in mined[:3]]
         identity, extra = _identity_candidates(hints, cache, emit)
         candidates.extend(extra)
-    candidates = dedupe(candidates)
+    candidates = prioritise(dedupe(candidates))
 
     hydrated = 0
     for i, cand in enumerate(candidates):

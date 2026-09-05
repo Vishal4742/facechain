@@ -11,6 +11,7 @@ import hashlib
 import io
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageOps
 
@@ -132,12 +133,24 @@ def parse_lens_response(data: dict[str, Any], *, engine: str) -> tuple[list[Cand
                 | {"source": item.get("source")},
             )
         )
-    hints = [
-        Hint(query=str(rc["query"]), kgmid=str(rc["kgmid"]))
-        for rc in data.get("related_content") or []
-        if rc.get("query") and rc.get("kgmid")
-    ]
+    hints: list[Hint] = []
+    for rc in data.get("related_content") or []:
+        query = rc.get("query")
+        if not query:
+            continue
+        kgmid = rc.get("kgmid") or _kgmid_from_link(rc.get("link"))
+        hint = Hint(query=str(query), kgmid=str(kgmid) if kgmid else None)
+        if hint not in hints:
+            hints.append(hint)
     return candidates, hints
+
+
+def _kgmid_from_link(link: Any) -> str | None:
+    """Lens puts the Knowledge Graph id in the related_content link (…&kgmid=/m/03qkvyf&…)."""
+    if not isinstance(link, str):
+        return None
+    values = parse_qs(urlparse(link).query).get("kgmid")
+    return values[0] if values else None
 
 
 def search_lens(

@@ -13,28 +13,39 @@ MAX_MEDIA_BYTES = 10 * 1024 * 1024
 X_MEDIA_HOST = "pbs.twimg.com"
 
 
-def media_url_for(cand: Candidate) -> str | None:
-    url = cand.media_url or cand.thumbnail_url
-    if not url:
-        return None
+def _with_size(url: str) -> str:
     if urlparse(url).netloc == X_MEDIA_HOST and "name=" not in url:
         url += ("&" if "?" in url else "?") + "name=large"
     return url
 
 
+def media_urls_for(cand: Candidate) -> list[str]:
+    """Platform image first (full resolution), Google's thumbnail second (always fetchable)."""
+    urls: list[str] = []
+    for url in (cand.media_url, cand.thumbnail_url):
+        if url and url not in urls:
+            urls.append(url)
+    return [_with_size(u) for u in urls]
+
+
 def download_media(cand: Candidate, cache: Cache) -> bytes | None:
-    url = media_url_for(cand)
-    if url is None:
-        return None
-    try:
-        return cache.cached_bytes(
-            "http.get",
-            {"url": url},
-            lambda: http.download_bytes(url, max_bytes=MAX_MEDIA_BYTES, referer=cand.url),
-            meta={"candidate": cand.url},
-        )
-    except CacheMiss:
-        return None
+    for url in media_urls_for(cand):
+        try:
+            data = cache.cached_bytes(
+                "http.get",
+                {"url": url},
+                lambda url=url: http.download_bytes(
+                    url, max_bytes=MAX_MEDIA_BYTES, referer=cand.url
+                ),
+                meta={"candidate": cand.url},
+            )
+        except CacheMiss:
+            continue
+        except Exception:  # noqa: BLE001 - one bad CDN must not kill the whole search
+            continue
+        if data:
+            return data
+    return None
 
 
 def download_all(

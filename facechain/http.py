@@ -11,6 +11,7 @@ import re
 import time
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -104,7 +105,7 @@ def download_bytes(
     """Fetch a media file with a browser UA. Returns None on any failure or non-media response."""
     headers = {"User-Agent": BROWSER_UA, "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
     if referer:
-        headers["Referer"] = referer
+        headers["Referer"] = quote(referer, safe=":/?&=#%@+,;~-._")
     try:
         resp = request("GET", url, headers=headers, timeout=timeout, retries=1, stream=True)
     except HttpError:

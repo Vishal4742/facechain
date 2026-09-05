@@ -104,14 +104,17 @@ def fetch_timeline(handle: str, cache: Cache) -> list[Tweet]:
     stable = Cache(cache.root, offline=cache.offline, live=False)
 
     def fetch() -> bytes | None:
-        resp = http.get(
-            TIMELINE_URL.format(handle=handle),
-            headers={"User-Agent": http.BROWSER_UA},
-            timeout=20,
-            retries=1,
-        )
+        try:
+            resp = http.get(
+                TIMELINE_URL.format(handle=handle),
+                headers={"User-Agent": http.BROWSER_UA},
+                timeout=20,
+                retries=1,
+            )
+        except http.HttpError:
+            return None  # rate-limited (429 after retries) or blocked: do not cache
         if resp.status_code != 200 or "__NEXT_DATA__" not in resp.text:
-            return None  # rate-limited or blocked: do not cache
+            return None
         return resp.content
 
     try:
@@ -123,13 +126,16 @@ def fetch_timeline(handle: str, cache: Cache) -> list[Tweet]:
 
 def fetch_tweet(tweet_id: str, cache: Cache, *, handle_hint: str | None = None) -> Tweet | None:
     def fetch() -> dict[str, Any] | None:
-        resp = http.get(
-            TWEET_URL,
-            params={"id": tweet_id, "token": "1"},
-            headers={"User-Agent": http.BROWSER_UA},
-            timeout=20,
-            retries=1,
-        )
+        try:
+            resp = http.get(
+                TWEET_URL,
+                params={"id": tweet_id, "token": "1"},
+                headers={"User-Agent": http.BROWSER_UA},
+                timeout=20,
+                retries=1,
+            )
+        except http.HttpError:
+            return None
         if resp.status_code != 200:
             return None
         try:

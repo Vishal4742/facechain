@@ -100,14 +100,24 @@ def accept(cands: Sequence[Candidate], *, match_thr: float, corroborate_thr: flo
         if c.platform and c.is_post and c.band == "match" and (c.similarity_bps or 0) >= match_bps
     ]
     if not posts:
+        social_scored = [c for c in scored if c.platform and c.is_post]
+        best_social = max(social_scored, key=lambda c: c.similarity_bps or 0, default=None)
         best = max(scored, key=lambda c: c.similarity_bps or 0, default=None)
         if best is None:
             return Decision(None, False, "REVIEW: no candidate with a detectable face")
+        if best_social is None:
+            n_social = sum(1 for c in cands if c.platform and c.is_post)
+            return Decision(
+                None,
+                False,
+                f"REVIEW: {n_social} social posts found but none had usable media/faces "
+                f"(best non-social {best.similarity:.2f})",
+            )
         return Decision(
             None,
             False,
-            f"REVIEW: no social post reached the match threshold "
-            f"(best {best.similarity:.2f} < {match_thr:.2f})",
+            f"REVIEW: best social post {best_social.similarity:.2f} < {match_thr:.2f} "
+            f"(best overall {best.similarity:.2f})",
         )
     winner = max(posts, key=lambda c: ((c.similarity_bps or 0), -c.engine_rank))
     supporters = {c.url for c in scored if (c.similarity_bps or 0) >= corroborate_bps}

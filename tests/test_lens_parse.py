@@ -63,9 +63,23 @@ def test_parses_candidates_with_platform_engine_rank_and_media_preference() -> N
     assert (cands[0].title or "").startswith("Virat Kohli on Instagram")
 
 
-def test_identity_hints_keep_kgmid_and_drop_generic_entries_without_kgmid() -> None:
+def test_identity_hints_take_kgmid_from_field_or_link_and_keep_name_only_hints() -> None:
     _, hints = parse_lens_response(FIXTURE, engine="lens:visual")
-    assert hints == [Hint(query="Virat Kohli", kgmid="/m/0f1jm3")]
+    assert hints == [
+        Hint(query="Virat Kohli", kgmid="/m/0f1jm3"),
+        Hint(query="cricketer", kgmid=None),
+    ]
+    data = {
+        "related_content": [
+            {
+                "query": "Lewis Hamilton",
+                "link": "https://www.google.com/search?hl=en&q=Lewis+Hamilton&kgmid=/m/031_jy&sa=X",
+            }
+        ]
+    }
+    assert parse_lens_response(data, engine="lens:visual")[1] == [
+        Hint(query="Lewis Hamilton", kgmid="/m/031_jy")
+    ]
 
 
 def test_exact_matches_are_parsed_with_their_own_engine_tag() -> None:

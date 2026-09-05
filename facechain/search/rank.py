@@ -63,8 +63,11 @@ def verify_candidates(
     return sorted(verified, key=Candidate.sort_key)
 
 
-def corroborate(cands: Sequence[Candidate]) -> list[Candidate]:
-    """Mark candidates that another engine also reached (same URL or same author)."""
+def corroborate(
+    cands: Sequence[Candidate], *, identity_tags: set[str] | None = None
+) -> list[Candidate]:
+    """Mark candidates another engine also reached (same URL/author) or authored by the
+    identity resolved through Wikidata (`identity_tags` are "@handle" strings)."""
     out: list[Candidate] = []
     for cand in cands:
         signals = {
@@ -74,6 +77,12 @@ def corroborate(cands: Sequence[Candidate]) -> list[Candidate]:
             and other.engine != cand.engine
             and (other.url == cand.url or (cand.author and other.author == cand.author))
         }
+        if (
+            identity_tags
+            and cand.author
+            and cand.author.lower() in {t.lower() for t in identity_tags}
+        ):
+            signals.add(f"identity:{cand.author}")
         merged = tuple(sorted(set(cand.corroborated_by) | signals))
         out.append(
             replace(cand, corroborated_by=merged) if merged != cand.corroborated_by else cand

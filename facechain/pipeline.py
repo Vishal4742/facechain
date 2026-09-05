@@ -7,17 +7,20 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .cache import Cache
+from .cache import Cache, CacheMiss
 from .config import Settings
 from .face.engine import get_engine
 from .face.match import pick_query_face
 from .face.types import Face
 from .search.base import Candidate, Hint
 from .search.filters import dedupe
+from .search.identity import Identity, resolve
 from .search.lens import SearchMeta, search_lens
+from .search.platforms.x import fetch_timeline, hydrate, tweets_to_candidates
 from .search.rank import Decision, accept, corroborate, verify_candidates
 
 CORROBORATE_THRESHOLD = 0.40
+HYDRATE_LIMIT = 10
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "cache"
 
 EventHandler = Callable[[str, str], None]
@@ -32,10 +35,32 @@ class SearchOutcome:
     decision: Decision
     hints: list[Hint] = field(default_factory=list)
     meta: list[SearchMeta] = field(default_factory=list)
+    identity: Identity | None = None
 
 
 class NoFaceError(RuntimeError):
     """The query image contains no detectable face."""
+
+
+def _identity_candidates(
+    hints: list[Hint], cache: Cache, emit: EventHandler
+) -> tuple[Identity | None, list[Candidate]]:
+    try:
+        identity = resolve(hints, cache)
+    except CacheMiss:
+        emit("warn", "identity: not cached, skipped (offline)")
+        return None, []
+    if identity is None:
+        emit("warn", "identity: no Wikidata match for the Lens hints")
+        return None, []
+    handles = ", ".join(f"{k}={v}" for k, v in identity.author_tags().items()) or "no handles"
+    emit("info", f"identity: {identity.label} ({identity.qid}); {handles}")
+    if not identity.handles.x:
+        return identity, []
+    tweets = fetch_timeline(identity.handles.x, cache)
+    cands = tweets_to_candidates(tweets, engine="identity:x")
+    emit("info", f"identity:x @{identity.handles.x}: {len(cands)} recent posts with media")
+    return identity, cands
 
 
 def run_search(
@@ -67,13 +92,23 @@ def run_search(
     candidates: list[Candidate] = []
     hints: list[Hint] = []
     meta: list[SearchMeta] = []
+    identity: Identity | None = None
     if "lens" in engines:
         fixtures = Cache(FIXTURES_DIR) if FIXTURES_DIR.exists() else None
         result = search_lens(image_bytes, settings, cache, fixtures=fixtures, on_event=on_event)
         candidates.extend(result.candidates)
         hints.extend(result.hints)
         meta.extend(result.meta)
+    if "identity" in engines:
+        identity, extra = _identity_candidates(hints, cache, emit)
+        candidates.extend(extra)
     candidates = dedupe(candidates)
+
+    hydrated = 0
+    for i, cand in enumerate(candidates):
+        if cand.platform == "x" and cand.is_post and cand.text is None and hydrated < HYDRATE_LIMIT:
+            candidates[i] = hydrate(cand, cache)
+            hydrated += 1
     emit(
         "info", f"{len(candidates)} unique candidates; verifying faces in the top {max_candidates}"
     )
@@ -87,7 +122,8 @@ def run_search(
         review_thr=settings.review_threshold,
         max_n=max_candidates,
     )
-    verified = corroborate(verified)
+    identity_tags = set(identity.author_tags().values()) if identity else set()
+    verified = corroborate(verified, identity_tags=identity_tags)
     decision = accept(
         verified, match_thr=settings.match_threshold, corroborate_thr=CORROBORATE_THRESHOLD
     )
@@ -99,4 +135,5 @@ def run_search(
         decision=decision,
         hints=hints,
         meta=meta,
+        identity=identity,
     )

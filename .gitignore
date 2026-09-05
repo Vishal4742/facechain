@@ -35,3 +35,7 @@ chain-ts/dist/
 Thumbs.db
 desktop.ini
 .claude/worktrees/
+
+# packaging leftovers
+build/
+dist/

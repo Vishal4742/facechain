@@ -91,11 +91,15 @@ def verify_run(
             signature_hint=(receipt or {}).get("signature"),
         )
     )
+    fields = chain.memo_fields or {}
     sas: SasCheck | None = None
     if settings is not None and sas_configured(settings):
         bundle = load_bundle(run_dir / "bundle.json")
-        sas = check_attestation(local, bundle, registry=registry, settings=settings)
-    fields = chain.memo_fields or {}
+        # the memo names the bundle's CID ("-" -> None); the attestation must carry the same one
+        expected_cid = (fields.get("cid") or "") if chain.found else None
+        sas = check_attestation(
+            local, bundle, registry=registry, settings=settings, expected_cid=expected_cid
+        )
     media_matches_chain = bool(local.media_sha256) and fields.get("media") == local.media_sha256
     if sas is not None and sas.found and not sas.ok:
         verdict = "TAMPERED"  # an attestation exists but disagrees with the bundle or registry

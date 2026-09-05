@@ -1,4 +1,4 @@
-"""CLI commands that touch evidence and the chain: run, anchor, verify."""
+"""CLI commands that touch evidence and the chain: run, anchor, attest, verify, setup-sas."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from .cache import STATS, Cache
+from .cache import STATS, Cache, CacheMiss
+from .chain import ipfs
 from .chain.memo import explorer_url, format_memo, load_keypair, send_memo
 from .chain.sas import SasError, attest, require_sas, setup_sas
 from .chain.verify import read_receipt, render_report, verify_run
@@ -19,10 +20,13 @@ from .evidence.bundle import (
     build_bundle,
     bundle_hash,
     load_bundle,
+    media_suffix,
     new_run_id,
     tamper_copy,
     write_evidence,
 )
+from .http import HttpError, redact
+from .search.lens import LensError
 
 console = Console()
 
@@ -48,17 +52,22 @@ def _write_receipt(run_dir: Path, receipt: dict[str, object]) -> None:
     (run_dir / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
 
 
-def attest_run(run_dir: Path, settings: Settings) -> dict[str, object]:
-    """Create the SAS attestation for a run's bundle and record it in receipt.json."""
+def attest_run(run_dir: Path, settings: Settings, *, cid: str | None = None) -> dict[str, object]:
+    """Create the SAS attestation for a run's bundle and record it in receipt.json.
+
+    `cid` is the bundle's IPFS CID (the one in the memo); it defaults to the receipt's.
+    """
     bundle = load_bundle(run_dir / "bundle.json")
+    receipt = read_receipt(run_dir) or {"bundle_hash": bundle_hash(bundle)}
+    if cid is None:
+        cid = str(receipt.get("bundle_cid") or "") or None
     started = time.perf_counter()
     try:
-        record = attest(bundle, bundle["post"].get("media_cid"), settings)
+        record = attest(bundle, cid, settings)
     except SasError as exc:
         console.print(f"[red]{exc}[/red]")
         raise SystemExit(1) from exc
     record["seconds"] = round(time.perf_counter() - started, 2)
-    receipt = read_receipt(run_dir) or {"bundle_hash": bundle_hash(bundle)}
     previous = receipt.get("sas") or {}
     if record.get("existed") and previous.get("attestation") == record["attestation"]:
         record = {**previous, "existed": True}  # keep the original signature and timing
@@ -74,25 +83,37 @@ def attest_run(run_dir: Path, settings: Settings) -> dict[str, object]:
     return record
 
 
-def anchor_run(run_dir: Path, settings: Settings, *, sas: bool = False) -> dict[str, object]:
-    """Send the memo for a run directory's bundle and write receipt.json (+ SAS with --sas)."""
+def anchor_run(
+    run_dir: Path, settings: Settings, *, pin: bool = True, sas: bool = False
+) -> dict[str, object]:
+    """Pin bundle.json (if Pinata is configured), send the memo, write receipt.json (+ SAS)."""
     if sas:
         _require_sas_or_exit(settings)
     bundle = load_bundle(run_dir / "bundle.json")
     h = bundle_hash(bundle)
     post, match = bundle["post"], bundle["match"]
-    memo = format_memo(
-        h, post["media_sha256"], post.get("media_cid"), match["similarity_bps"], post["url"]
-    )
+    bundle_cid: str | None = None
+    if pin and settings.pinata_jwt:
+        bundle_cid = ipfs.pin_file(
+            run_dir / "bundle.json", jwt=settings.pinata_jwt, name=f"{h[:16]}-bundle.json"
+        )
+        console.print(
+            f"[green]pinned bundle.json: {bundle_cid}[/green]"
+            if bundle_cid
+            else "[yellow]Pinata upload failed; continuing with cid=-[/yellow]"
+        )
+    memo = format_memo(h, post["media_sha256"], bundle_cid, match["similarity_bps"], post["url"])
     keypair = load_keypair(settings.solana_keypair_path)
     console.print(f"[dim]memo ({len(memo.encode())} bytes): {memo}[/dim]")
     started = time.perf_counter()
     signature = asyncio.run(send_memo(memo, rpc_url=settings.solana_rpc_url, keypair=keypair))
-    receipt = {
+    receipt: dict[str, object] = {
         "signature": signature,
         "explorer": explorer_url(signature),
         "memo": memo,
         "bundle_hash": h,
+        "bundle_cid": bundle_cid,
+        "media_cid": post.get("media_cid"),
         "registry": str(keypair.pubkey()),
         "rpc_url": settings.solana_rpc_url,
         "anchored_at": int(time.time()),
@@ -102,7 +123,7 @@ def anchor_run(run_dir: Path, settings: Settings, *, sas: bool = False) -> dict[
     console.print(f"[bold green]anchored[/bold green] in {receipt['seconds']}s: {signature}")
     console.print(f"explorer: {receipt['explorer']}")
     if sas:
-        receipt["sas"] = attest_run(run_dir, settings)
+        receipt["sas"] = attest_run(run_dir, settings, cid=bundle_cid)
     return receipt
 
 
@@ -119,6 +140,7 @@ def anchor_run(run_dir: Path, settings: Settings, *, sas: bool = False) -> dict[
 @click.option("--live", is_flag=True, help="Bypass cache reads: every search is live (on camera).")
 @click.option("--offline", is_flag=True, help="Never touch the network; fail on a cache miss.")
 @click.option("--no-anchor", is_flag=True, help="Stop after writing evidence; skip the chain.")
+@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
 @click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
 def run(
     image_path: Path,
@@ -128,12 +150,15 @@ def run(
     live: bool,
     offline: bool,
     no_anchor: bool,
+    no_pin: bool,
     sas: bool,
 ) -> None:
     """End to end: scan -> search -> face-verify -> evidence bundle -> devnet memo [+ SAS]."""
     from .pipeline import NoFaceError, run_search
     from .search.rank import render_table
 
+    if live and offline:
+        raise click.UsageError("--live and --offline are mutually exclusive")
     settings = load()
     if sas and not no_anchor:
         _require_sas_or_exit(settings)  # fail before spending a search or a memo
@@ -154,6 +179,9 @@ def run(
     except NoFaceError as exc:
         console.print(f"[red]{exc}[/red]")
         raise SystemExit(2) from exc
+    except (LensError, HttpError, CacheMiss, ValueError) as exc:
+        console.print(f"[bold red]search failed: {redact(str(exc))}[/bold red]")
+        raise SystemExit(3) from exc
 
     console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
     decision = outcome.decision
@@ -166,6 +194,21 @@ def run(
     winner = decision.winner if decision.accepted else None
     bundle = None
     if winner is not None:
+        media_cid: str | None = None
+        if settings.pinata_jwt and not no_pin and winner.media_bytes:
+            media_cid = ipfs.pin_bytes(
+                winner.media_bytes,
+                jwt=settings.pinata_jwt,
+                name=f"{run_id}-post_media{media_suffix(winner.media_bytes)}",
+                content_type="image/jpeg"
+                if media_suffix(winner.media_bytes) == ".jpg"
+                else "application/octet-stream",
+            )
+            console.print(
+                f"[green]pinned post media: {media_cid}[/green]"
+                if media_cid
+                else "[yellow]Pinata media upload failed; media_cid stays null[/yellow]"
+            )
         bundle = build_bundle(
             face_id=outcome.face_id,
             winner=winner,
@@ -173,6 +216,7 @@ def run(
             candidates_considered=len(outcome.candidates),
             found_at=int(time.time()),
             engines=engine_list,
+            media_cid=media_cid,
         )
     write_evidence(
         run_dir,
@@ -192,17 +236,18 @@ def run(
     console.print(f"winner: {winner.url}\nbundle sha256 (H): {bundle_hash(bundle)}")
     if no_anchor:
         raise SystemExit(0)
-    anchor_run(run_dir, settings, sas=sas)
+    anchor_run(run_dir, settings, pin=not no_pin, sas=sas)
 
 
 @click.command()
 @click.option(
     "--run", "run_dir", required=True, type=click.Path(exists=True, file_okay=False, path_type=Path)
 )
+@click.option("--no-pin", is_flag=True, help="Skip IPFS pinning even if PINATA_JWT is set.")
 @click.option("--sas", is_flag=True, help="Also create the SAS attestation after the memo.")
-def anchor(run_dir: Path, sas: bool) -> None:
+def anchor(run_dir: Path, no_pin: bool, sas: bool) -> None:
     """Anchor an existing run's bundle on devnet (writes receipt.json)."""
-    anchor_run(run_dir, load(), sas=sas)
+    anchor_run(run_dir, load(), pin=not no_pin, sas=sas)
 
 
 @click.command()
@@ -216,13 +261,20 @@ def anchor(run_dir: Path, sas: bool) -> None:
 @click.option(
     "--registry", default=None, help="Registry wallet pubkey (default: receipt or keypair)."
 )
+@click.option("--cid", default=None, help="Fetch bundle.json (and its media) from IPFS by CID.")
 def verify(
-    run_dir: Path | None, bundle_path: Path | None, tamper: bool, registry: str | None
+    run_dir: Path | None,
+    bundle_path: Path | None,
+    tamper: bool,
+    registry: str | None,
+    cid: str | None,
 ) -> None:
     """Recompute hashes from stored evidence and check them against the on-chain memo."""
     settings = load()
+    if cid:
+        run_dir = fetch_run_from_ipfs(cid, settings)
     if run_dir is None and bundle_path is None:
-        raise click.UsageError("pass --run DIR or --bundle FILE")
+        raise click.UsageError("pass --run DIR, --bundle FILE or --cid CID")
     target = run_dir if run_dir is not None else bundle_path.parent  # type: ignore[union-attr]
     if tamper:
         target = tamper_copy(target)
@@ -274,3 +326,22 @@ def setup_sas_cmd() -> None:
         expected = result["credential" if key == "SAS_CREDENTIAL" else "schema"]
         if current and current != expected:
             console.print(f"[yellow]{key} is set to {current}, expected {expected}[/yellow]")
+
+
+def fetch_run_from_ipfs(cid: str, settings: Settings) -> Path:
+    """Materialise a run directory from IPFS: bundle.json by CID, media by bundle.post.media_cid."""
+    cache = Cache(settings.cache_dir)
+    raw = ipfs.fetch(cid, cache=cache, gateway=settings.pinata_gateway)
+    if not raw:
+        raise click.ClickException(f"could not fetch {cid} from any IPFS gateway")
+    run_dir = settings.evidence_dir / f"_cid_{cid[:16]}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "bundle.json").write_bytes(raw)
+    bundle = json.loads(raw.decode("utf-8"))
+    media_cid = bundle.get("post", {}).get("media_cid")
+    if media_cid:
+        media = ipfs.fetch(media_cid, cache=cache, gateway=settings.pinata_gateway)
+        if media:
+            (run_dir / f"post_media{media_suffix(media)}").write_bytes(media)
+    console.print(f"fetched bundle {cid} -> {run_dir}")
+    return run_dir

@@ -223,10 +223,19 @@ def effective_hash(local: LocalResult, bundle: dict[str, Any]) -> tuple[str, boo
 
 
 def compare_attestation(
-    found: dict[str, Any], bundle: dict[str, Any], registry: str
+    found: dict[str, Any],
+    bundle: dict[str, Any],
+    registry: str,
+    expected_cid: str | None = None,
 ) -> tuple[bool, tuple[str, ...]]:
-    """(signer == registry, field mismatches between the chain record and the bundle)."""
-    expected = attestation_fields(bundle, bundle["post"].get("media_cid"))
+    """(signer == registry, field mismatches between the chain record and the bundle).
+
+    The bundle cannot contain its own IPFS CID, so `cid` is only compared when the caller knows
+    it (from the memo); `None` skips that field.
+    """
+    expected = attestation_fields(bundle, expected_cid)
+    if expected_cid is None:
+        expected.pop("cid")
     data = found.get("data") or {}
     mismatches = tuple(
         f"{key}: chain {data.get(key)!r} != bundle {value!r}"
@@ -237,9 +246,14 @@ def compare_attestation(
 
 
 def check_attestation(
-    local: LocalResult, bundle: dict[str, Any], *, registry: str, settings: Settings
+    local: LocalResult,
+    bundle: dict[str, Any],
+    *,
+    registry: str,
+    settings: Settings,
+    expected_cid: str | None = None,
 ) -> SasCheck:
-    """Derive the PDA from the evidence, fetch it and compare it with the bundle."""
+    """Derive the PDA from the evidence, fetch it and compare it with the bundle (+ memo cid)."""
     h, recomputed = effective_hash(local, bundle)
     try:
         found = fetch_attestation(h, settings)
@@ -261,7 +275,7 @@ def check_attestation(
             nonce=nonce,
             detail=detail,
         )
-    signer_ok, mismatches = compare_attestation(found, bundle, registry)
+    signer_ok, mismatches = compare_attestation(found, bundle, registry, expected_cid)
     return SasCheck(
         found=True,
         hash_used=h,

@@ -313,6 +313,15 @@ def test_compare_attestation_flags_signer_and_field_mismatches() -> None:
     assert mismatches == ("similarity_bps: chain 9999 != bundle 7123",)
 
 
+def test_compare_attestation_checks_cid_only_when_the_memo_names_one() -> None:
+    # the bundle cannot hold its own CID: without a memo cid the field is skipped ...
+    assert compare_attestation(_found(), _bundle(), REGISTRY, expected_cid=None) == (True, ())
+    # ... with one it must match exactly ("" means the memo said cid=-)
+    assert compare_attestation(_found(), _bundle(), REGISTRY, expected_cid="") == (True, ())
+    _, mismatches = compare_attestation(_found(), _bundle(), REGISTRY, expected_cid="bafy1")
+    assert mismatches == ("cid: chain '' != bundle 'bafy1'",)
+
+
 def test_effective_hash_recomputes_when_media_was_tampered(tmp_path: Path) -> None:
     assert effective_hash(_local(tmp_path), _bundle()) == (H, False)
     h2, recomputed = effective_hash(_local(tmp_path, media_ok=False), _bundle())

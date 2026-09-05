@@ -16,8 +16,12 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
-from .cache import STATS, Cache
+from .cache import STATS, Cache, CacheMiss
 from .config import Settings, load
+from .http import HttpError, redact
+from .search.lens import LensError
+
+ENGINE_ERRORS = (LensError, HttpError, CacheMiss, ValueError)
 
 console = Console()
 MODEL_DIR = Path.home() / ".insightface/models/buffalo_l"
@@ -229,6 +233,8 @@ def search(
     from .search.lens import account_searches_left
     from .search.rank import render_table
 
+    if live and offline:
+        raise click.UsageError("--live and --offline are mutually exclusive")
     settings = load()
     cache = _make_cache(settings, live=live, offline=offline)
     STATS.reset()
@@ -246,6 +252,9 @@ def search(
     except NoFaceError as exc:
         console.print(f"[red]{exc}[/red]")
         raise SystemExit(2) from exc
+    except ENGINE_ERRORS as exc:
+        console.print(f"[bold red]search failed: {redact(str(exc))}[/bold red]")
+        raise SystemExit(3) from exc
 
     console.print(render_table(outcome.candidates, title=f"candidates for {image_path.name}"))
     decision = outcome.decision

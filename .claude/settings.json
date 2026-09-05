@@ -19,8 +19,6 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
       "Bash(solana balance:*)",
       "Bash(solana confirm:*)",
       "Bash(facechain:*)",

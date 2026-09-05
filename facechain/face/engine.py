@@ -7,7 +7,9 @@ detection threshold; reported coordinates are always in source-image pixels.
 
 from __future__ import annotations
 
+import contextlib
 import io
+import sys
 import threading
 from typing import Any
 
@@ -54,12 +56,13 @@ class FaceEngine:
     def __init__(self, name: str = MODEL_NAME, det_thresh: float = DEFAULT_DET_THRESH) -> None:
         from insightface.app import FaceAnalysis
 
-        self.app = FaceAnalysis(
-            name=name,
-            allowed_modules=["detection", "recognition"],
-            providers=["CPUExecutionProvider"],
-        )
-        self.app.prepare(ctx_id=-1, det_thresh=det_thresh)
+        with contextlib.redirect_stdout(sys.stderr):  # model chatter must not corrupt --json
+            self.app = FaceAnalysis(
+                name=name,
+                allowed_modules=["detection", "recognition"],
+                providers=["CPUExecutionProvider"],
+            )
+            self.app.prepare(ctx_id=-1, det_thresh=det_thresh)
         self.det_thresh = det_thresh
 
     def _detect(self, img: np.ndarray, det_thresh: float) -> list[Any]:

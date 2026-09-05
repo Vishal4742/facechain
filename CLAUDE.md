@@ -36,4 +36,11 @@ HH Goa 2026 shortlisting Task 3. Pipeline: face photo → genuine social search 
 ## Mistakes and rules
 Append one line after every correction ("Update your CLAUDE.md so you don't make that mistake again"). Prune at the end of each day.
 
-- (none yet)
+- solana-py 0.40: `MemoParams` lives in `spl.memo.models`; only `create_memo` is in `spl.memo.instructions`.
+- `get_signatures_for_address` defaults to finalized; pass `commitment=Confirmed` and retry briefly, or a record anchored seconds ago looks missing.
+- `EncodedConfirmedTransactionWithStatusMeta.to_json()` is flat: `slot`, `blockTime`, `transaction.message.instructions[].parsed`; there is no nested `transaction.transaction`.
+- InsightFace prints model chatter to stdout; construct the engine under `redirect_stdout(sys.stderr)` or `--json` output breaks.
+- Never cache an empty Lens result; SerpApi's "no results" can be transient.
+- Any error text that can reach the screen goes through `http.redact()` first (API keys ride in query strings).
+- The ruff hook only fires for Write/Edit in a fresh session; run `ruff format . && ruff check --fix .` before every commit.
+- Exceptions to "network only via http.py": Solana RPC calls (solana-py client) and the stdlib-only `scripts/fetch_samples.py`.

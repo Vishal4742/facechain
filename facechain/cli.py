@@ -275,3 +275,12 @@ def search(
         json_out.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
         console.print(f"wrote {json_out}")
     raise SystemExit(0 if decision.accepted else 2)
+
+
+from .cli_chain import anchor as _anchor  # noqa: E402
+from .cli_chain import run as _run  # noqa: E402
+from .cli_chain import verify as _verify  # noqa: E402
+
+main.add_command(_run, "run")
+main.add_command(_anchor, "anchor")
+main.add_command(_verify, "verify")

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -90,9 +91,14 @@ def cache_key(namespace: str, params: Mapping[str, Any]) -> str:
 
 def _atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
 
 
 class Cache:
@@ -175,7 +181,8 @@ class Cache:
         if self.offline:
             raise CacheMiss(f"{namespace} {canonical_json(dict(params))}")
         value = fetch()
-        self.put_json(namespace, params, value, meta)
+        if value is not None:
+            self.put_json(namespace, params, value, meta)
         return value
 
     # -- bytes -------------------------------------------------------------------------

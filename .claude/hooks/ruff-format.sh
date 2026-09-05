@@ -17,8 +17,8 @@ except Exception:
 case "$file" in
   *.py)
     [ -f "$file" ] || exit 0
-    "$RUFF" format -q "$file" >/dev/null 2>&1
-    "$RUFF" check --fix -q "$file" >/dev/null 2>&1
+    "$RUFF" format -q -- "$file" >/dev/null 2>&1
+    "$RUFF" check --fix -q -- "$file" >/dev/null 2>&1
     ;;
 esac
 exit 0

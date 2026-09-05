@@ -63,4 +63,5 @@ def pick_query_face(faces: Sequence[Face], index: int | None = None) -> Face:
         if index < 0 or index >= len(faces):
             raise ValueError(f"face index {index} out of range 0..{len(faces) - 1}")
         return faces[index]
-    return max(faces, key=lambda f: f.area)
+    good = [f for f in faces if quality_ok(f)[0]]
+    return max(good or faces, key=lambda f: f.area)

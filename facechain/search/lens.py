@@ -178,7 +178,15 @@ def search_lens(
             return lens_search_raw(image_id, type_, settings.serpapi_key)
 
         try:
-            data = cache.cached_json("serpapi.lens", params, fetch, meta={"engine": "google_lens"})
+            data = cache.get_json("serpapi.lens", params)
+            if data is None:
+                if cache.offline:
+                    raise CacheMiss(f"serpapi.lens {type_} for image {image_sha[:12]}")
+                data = fetch()
+                if data.get("visual_matches") or data.get("exact_matches"):
+                    cache.put_json("serpapi.lens", params, data, meta={"engine": "google_lens"})
+                else:
+                    emit(f"lens {type_}: empty result not cached (transient?)", "warn")
         except CacheMiss:
             raise
         except (http.HttpError, LensError) as exc:

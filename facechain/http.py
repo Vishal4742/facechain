@@ -7,6 +7,7 @@ so quotas, timeouts and offline mode have one place to live.
 from __future__ import annotations
 
 import random
+import re
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -24,8 +25,19 @@ SESSION = requests.Session()
 SESSION.headers["User-Agent"] = USER_AGENT
 
 
+SECRET_RE = re.compile(r"(api_key|token|jwt|authorization|key)=([^&\s'\"]+)", re.IGNORECASE)
+
+
+def redact(text: str) -> str:
+    """Strip credential-looking query values from any message that may reach a screen."""
+    return SECRET_RE.sub(lambda m: f"{m.group(1)}=REDACTED", text)
+
+
 class HttpError(RuntimeError):
     """Raised after retries are exhausted or on a non-retryable HTTP status."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(redact(message))
 
 
 def request(
@@ -61,14 +73,16 @@ def request(
         else:
             if resp.status_code not in RETRY_STATUS:
                 return resp
-            last_error = HttpError(f"{method} {url} -> HTTP {resp.status_code}")
+            last_error = HttpError(f"{method} {redact(url)} -> HTTP {resp.status_code}")
             retry_after = resp.headers.get("Retry-After")
             if retry_after and retry_after.isdigit():
                 time.sleep(min(int(retry_after), 30))
                 continue
         if attempt < retries:
             time.sleep(min(2**attempt, 8) + random.uniform(0, 0.5))
-    raise HttpError(f"{method} {url} failed after {retries + 1} attempts: {last_error}")
+    raise HttpError(
+        f"{method} {redact(url)} failed after {retries + 1} attempts: {redact(str(last_error))}"
+    )
 
 
 def get(url: str, **kwargs: Any) -> requests.Response:
@@ -102,9 +116,13 @@ def download_bytes(
         return None
     chunks: list[bytes] = []
     size = 0
-    for chunk in resp.iter_content(chunk_size=65536):
-        size += len(chunk)
-        if size > max_bytes:
-            return None
-        chunks.append(chunk)
+    try:
+        with resp:
+            for chunk in resp.iter_content(chunk_size=65536):
+                size += len(chunk)
+                if size > max_bytes:
+                    return None
+                chunks.append(chunk)
+    except requests.RequestException:
+        return None
     return b"".join(chunks)
